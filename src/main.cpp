@@ -10,34 +10,34 @@
 #define SENSOR_REGISTER 0x03
 
 // カラーセンサー2個に対し2個i2cのチャネルを贅沢に作らないと行けないっぽい
-SoftWire RSWire(SDA, SCL);
 SoftWire LSWire(A4, A5);
+SoftWire RSWire(SDA, SCL);
 AsyncDelay readInterval;
 
 void setup() {
   // シリアル開始
   Serial.begin(9600);
   // ソフトウェアi2c開始
-  RSWire.begin();
   LSWire.begin();
+  RSWire.begin();
   // コントロールバイトを指定、スリープ解除
-  RSWire.beginTransmission(S11059_ADDR);
-  RSWire.write(CONTROL_MSB);
-  RSWire.write(CONTROL_1_LSB);
-  RSWire.endTransmission();
   LSWire.beginTransmission(S11059_ADDR);
   LSWire.write(CONTROL_MSB);
   LSWire.write(CONTROL_1_LSB);
   LSWire.endTransmission();
-  // コントロールバイトを指定、バスリリース
   RSWire.beginTransmission(S11059_ADDR);
   RSWire.write(CONTROL_MSB);
-  RSWire.write(CONTROL_2_LSB);
+  RSWire.write(CONTROL_1_LSB);
   RSWire.endTransmission();
+  // コントロールバイトを指定、バスリリース
   LSWire.beginTransmission(S11059_ADDR);
   LSWire.write(CONTROL_MSB);
   LSWire.write(CONTROL_2_LSB);
   LSWire.endTransmission();
+  RSWire.beginTransmission(S11059_ADDR);
+  RSWire.write(CONTROL_MSB);
+  RSWire.write(CONTROL_2_LSB);
+  RSWire.endTransmission();
 }
 
 void loop() {
@@ -45,34 +45,13 @@ void loop() {
   int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir;
   delay(10);
   // 出力データバイトを指定
-  RSWire.beginTransmission(S11059_ADDR);
-  RSWire.write(SENSOR_REGISTER);
-  RSWire.endTransmission();
   LSWire.beginTransmission(S11059_ADDR);
   LSWire.write(SENSOR_REGISTER);
   LSWire.endTransmission();
-  // 8バイトを要求し、大丈夫であれば上部、下部バイトと読み込み、それぞれの色の変数に入れる
-  //右側
-  RSWire.requestFrom(S11059_ADDR, 8);
-  if (RSWire.available()) {
-    // 赤
-    higher = RSWire.read();
-    lower = RSWire.read();
-    rr = higher << 8 | lower;
-    // 緑
-    higher = RSWire.read();
-    lower = RSWire.read();
-    rg = higher << 8 | lower;
-    // 青
-    higher = RSWire.read();
-    lower = RSWire.read();
-    rb = higher << 8 | lower;
-    // 赤外線
-    higher = RSWire.read();
-    lower = RSWire.read();
-    rir = higher << 8 | lower;
-  }
+  RSWire.beginTransmission(S11059_ADDR);
+  RSWire.write(SENSOR_REGISTER);
   RSWire.endTransmission();
+  // 8バイトを要求し、大丈夫であれば上部、下部バイトと読み込み、それぞれの色の変数に入れる
   // 左側
   LSWire.requestFrom(S11059_ADDR, 8);
   if (LSWire.available()) {
@@ -94,21 +73,43 @@ void loop() {
     lir = higher << 8 | lower;
   }
   LSWire.endTransmission();
-  // それぞれの値をスラッシュ区切りで改行までシリアルで送信
-  Serial.print(rr);
-  Serial.print('/');
-  Serial.print(rg);
-  Serial.print('/');
-  Serial.print(rb);
-  Serial.print('/');
-  Serial.print(rir);
-  Serial.print('/');
+  //右側
+  RSWire.requestFrom(S11059_ADDR, 8);
+  if (RSWire.available()) {
+    // 赤
+    higher = RSWire.read();
+    lower = RSWire.read();
+    rr = higher << 8 | lower;
+    // 緑
+    higher = RSWire.read();
+    lower = RSWire.read();
+    rg = higher << 8 | lower;
+    // 青
+    higher = RSWire.read();
+    lower = RSWire.read();
+    rb = higher << 8 | lower;
+    // 赤外線
+    higher = RSWire.read();
+    lower = RSWire.read();
+    rir = higher << 8 | lower;
+  }
+  RSWire.endTransmission();
+  // それぞれの値をカンマ区切りで改行までシリアルで送信
+  // 右左それぞれ、赤、緑、青、赤外線と出す
   Serial.print(lr);
-  Serial.print('/');
+  Serial.print(',');
   Serial.print(lg);
-  Serial.print('/');
+  Serial.print(',');
   Serial.print(lb);
-  Serial.print('/');
+  Serial.print(',');
   Serial.print(lir);
+  Serial.print(',');
+  Serial.print(rr);
+  Serial.print(',');
+  Serial.print(rg);
+  Serial.print(',');
+  Serial.print(rb);
+  Serial.print(',');
+  Serial.print(rir);
   Serial.print('\n');
 }
