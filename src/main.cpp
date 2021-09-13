@@ -112,5 +112,4 @@ void loop() {
   Serial.print(',');
   Serial.print(rir);
   Serial.print('\n');
-  delay(100);
 }
