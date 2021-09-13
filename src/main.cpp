@@ -112,5 +112,5 @@ void loop() {
   Serial.print(',');
   Serial.print(rir);
   Serial.print('\n');
-  //コミットできるかなー
+  delay(100);
 }
