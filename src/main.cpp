@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <AsyncDelay.h>
 #include <SoftWire.h>
+#include <wire.h>
 
 //アドレス指定
 #define S11059_ADDR 0x2A
@@ -13,10 +14,55 @@
 SoftWire LSWire(A4, A5);
 SoftWire RSWire(SDA, SCL);
 AsyncDelay readInterval;
-
+void test_sensor_setup(){
+  Wire.begin();
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(CONTROL_MSB);
+  Wire.write(CONTROL_1_LSB);
+  Wire.write(CONTROL_2_LSB);
+  Wire.endTransmission();
+}
+void test_sensor_loop(){
+  int low,high,r,g,b,ir;
+  delay(10);
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(SENSOR_REGISTER);
+  Wire.endTransmission();
+  Wire.requestFrom(S11059_ADDR,8);
+  if(Wire.available()){
+    high = Wire.read();
+    low = Wire.read();
+    r = high << 8 | low;
+    high = Wire.read();
+    low = Wire.read();
+    g = high << 8 | low;
+    high = Wire.read();
+    low = Wire.read();
+    b = high << 8 | low;
+    high = Wire.read();
+    low = Wire.read();
+    ir = high << 8 | low;
+  }
+  Wire.endTransmission();
+  Serial.print(r);
+  Serial.print(",");
+  Serial.print(g);
+  Serial.print(",");
+  Serial.print(b);
+  Serial.print(",");
+  Serial.print(ir);
+  Serial.print('\n');  
+}
 void setup() {
+  pinMode(LED_BUILTIN,OUTPUT);
+  digitalWrite(LED_BUILTIN,HIGH);
+  delay(1000);
+  digitalWrite(LED_BUILTIN,LOW);
   // シリアル開始
   Serial.begin(9600);
+  //テスト
+  test_sensor_setup();
+  return;
   // ソフトウェアi2c開始
   LSWire.begin();
   RSWire.begin();
@@ -41,6 +87,9 @@ void setup() {
 }
 
 void loop() {
+  //テスト
+  test_sensor_loop();
+  return;
   // 変数宣言
   int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir;
   delay(10);
