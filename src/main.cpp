@@ -16,10 +16,11 @@ SoftWire RSWire(SDA, SCL);
 AsyncDelay readInterval;
 void test_sensor_setup(){
   Wire.begin();
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(CONTROL_MSB);
-  Wire.write(CONTROL_1_LSB);
-  Wire.write(CONTROL_2_LSB);
+  Wire.beginTransmission(0x2A);
+  Wire.write(0x00);
+  Wire.write(0x89);
+  Wire.write(0x00);
+  Wire.write(0x09);
   Wire.endTransmission();
 }
 void test_sensor_loop(){
