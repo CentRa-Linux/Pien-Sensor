@@ -2,6 +2,7 @@
 #include <AsyncDelay.h>
 #include <SoftWire.h>
 #include <wire.h>
+#include <SoftwareSerial.h>
 
 //アドレス指定
 #define S11059_ADDR 0x2A
@@ -14,6 +15,16 @@
 SoftWire LSWire(A4, A5);
 SoftWire RSWire(SDA, SCL);
 AsyncDelay readInterval;
+SoftwareSerial ss(2,3);
+void test_ss_setup(){
+  ss.begin(9600);
+}
+void test_ss_loop(){
+  for(int i = 0;i < 256;i++){
+    ss.write(i);
+    delay(250);
+  }
+}
 void test_sensor_setup(){
   Wire.begin();
   Wire.beginTransmission(S11059_ADDR);
@@ -54,15 +65,13 @@ void test_sensor_loop(){
   Serial.print('\n');  
 }
 void setup() {
-  pinMode(LED_BUILTIN,OUTPUT);
-  digitalWrite(LED_BUILTIN,HIGH);
-  delay(1000);
-  digitalWrite(LED_BUILTIN,LOW);
+  test_ss_setup();
+  return;
   // シリアル開始
   Serial.begin(9600);
   //テスト
-  test_sensor_setup();
-  return;
+  //test_sensor_setup();
+  //return;
   // ソフトウェアi2c開始
   LSWire.begin();
   RSWire.begin();
@@ -88,7 +97,7 @@ void setup() {
 
 void loop() {
   //テスト
-  test_sensor_loop();
+  test_ss_loop();
   return;
   // 変数宣言
   int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir;
