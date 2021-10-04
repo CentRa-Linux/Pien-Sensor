@@ -129,19 +129,19 @@ void color_read(){
   change_i2c_port(1);
   Wire.requestFrom(S11059_ADDR,8);
   if(Wire.available()){
-    //right-red
+    //left-red
     higher = Wire.read();
     lower = Wire.read();
     lr = higher << 8 | lower;
-    //right-green
+    //left-green
     higher = Wire.read();
     lower = Wire.read();
     lg = higher << 8 | lower;
-    //right-blue
+    //left-blue
     higher = Wire.read();
     lower = Wire.read();
     lb = higher << 8 | lower;
-    //right-ir
+    //left-ir
     higher = Wire.read();
     lower = Wire.read();
     lir = higher << 8 | lower;
