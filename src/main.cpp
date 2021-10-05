@@ -7,7 +7,7 @@
 //D22,D24:Sonic Sensor(Trig)
 //D23,D25:Sonic Sensor(Echo)
 //D26~D29:Touch Sensor
-//
+//motor_write()の最大値は256
 //
 //
 //
@@ -337,7 +337,40 @@ void loop() {
     color_read();
     judge_color();
     if(!isTraceing)return;
-    
+    //特殊処理発生かどうか知りたい
+    if((Line_Sensor[1] == WHITE || Line_Sensor[1] == BLACK) 
+        && (Line_Sensor[3] == WHITE || Line_Sensor[3] == BLACK)){
+      //白黒処理
+      int right_value,left_value,right_colored,left_colored;
+      right_colored = (rr + rg + rb) / 3;//だいたい最大値256-512くらい？
+      left_colored = (lr + lg + lb) / 3;
+
+      //右のP制御値
+      //この辺は要検討
+    }else if(Line_Sensor[1] == RED || Line_Sensor[3] == RED){
+      //赤処理
+      motor_write(0,0);
+      delay(1000000);
+    }else if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
+      //緑処理
+      bool isRightGreen,isLeftGreen;
+      Line_Sensor[1] == GREEN ? isRightGreen = true : isRightGreen = false;
+      Line_Sensor[3] == GREEN ? isLeftGreen = true : isLeftGreen = false;
+      motor_write(0,0);
+      delay(500);
+      motor_write(64,64);
+      while(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
+        color_read();
+        judge_color();
+      }
+      motor_write(0,0);
+      color_read();
+      judge_color();
+      if(Line_Sensor[2] != BLACK)Serial.println("An Fatal Error Has Occured.Program Will Exit.Stop Code:Black Line Not Found");
+    }else{
+      if(Line_Sensor[1] == BLACK || Line_Sensor[3] == BLACK){
+      }
+    }
   }else{//救助プログラム
 
   }
