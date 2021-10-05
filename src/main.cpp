@@ -1,12 +1,12 @@
 /*///////////////////////////////////////////////
 //ピン配置
 //SDA&SCL:I2C
-//A6~A11:tpr-r,tpr-m,tpr-l,silver,tpr-back-r,tpr-back-l
+//A6~A10:tpr-r,tpr-m,tpr-l,silver,tpr-back
 //D2,D3:Motor Driver(PWM)
 //D4~D7:Motor Driver(Digital)
 //D22,D24:Sonic Sensor(Trig)
 //D23,D25:Sonic Sensor(Echo)
-//D26~D30:Touch Sensor
+//D26~D29:Touch Sensor
 //
 //
 //
@@ -22,8 +22,7 @@
 #define P_TPR_M A7
 #define P_TPR_L A8
 #define P_SILVER A9
-#define P_TPR_BR A10
-#define P_TPR_BL A11
+#define P_TPR_B A10
 #define P_M_APWM 2
 #define P_M_A1 4
 #define P_M_A2 5
@@ -37,8 +36,7 @@
 #define P_T_R 26
 #define P_T_M 27
 #define P_T_L 28
-#define P_T_BR 29
-#define P_T_BL 30
+#define P_T_B 29
 
 //アドレス指定
 #define S11059_ADDR 0x2A
@@ -54,6 +52,12 @@ enum Color{BLACK,WHITE,GREEN,RED,SILVER};
 
 //int
 int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r;
+
+//右から左へ
+Color Line_Sensor[5];
+
+//走行モード切替
+bool isTraceing = true;
 
 // カラーセンサー2個に対し2個i2cのチャネルを贅沢に作らないと行けないっぽい
 void test_sensor_setup(){
@@ -112,8 +116,7 @@ void setup() {
   pinMode(P_TPR_M,INPUT);
   pinMode(P_TPR_L,INPUT);
   pinMode(P_SILVER,INPUT);
-  pinMode(P_TPR_BR,INPUT);
-  pinMode(P_TPR_BL,INPUT);
+  pinMode(P_TPR_B,INPUT);
   pinMode(P_M_APWM,OUTPUT);
   pinMode(P_M_A1,OUTPUT);
   pinMode(P_M_A2,OUTPUT);
@@ -127,8 +130,7 @@ void setup() {
   pinMode(P_T_R,INPUT);
   pinMode(P_T_M,INPUT);
   pinMode(P_T_L,INPUT);
-  pinMode(P_T_BR,INPUT);
-  pinMode(P_T_BL,INPUT);
+  pinMode(P_T_B,INPUT);
   // シリアル開始
   Serial.begin(9600);
   //テスト
@@ -213,16 +215,100 @@ void color_read(){
   Wire.endTransmission();
 
   //銀検知読み取り
-
+  silver = analogRead(P_SILVER);
   //TPR105読み取り
-
+  tpr_r = analogRead(P_TPR_R);
+  tpr_m = analogRead(P_TPR_M);
+  tpr_l = analogRead(P_TPR_L);
 }
 
 void judge_color(){
-  #define r_border
-  #define g_border
-  #define b_border
-  #define ir_border
+  #define R_BORDER 0
+  #define G_BORDER 0
+  #define B_BORDER 0
+  #define IR_BORDER 0
+  #define TPR_BORDER 0
+  #define SILVER_BORDER 0
+  //I2C Color Sensor
+  //right
+  if(rr > R_BORDER){
+    if(rg > G_BORDER){
+      Line_Sensor[1] = WHITE;
+    }else{
+      Line_Sensor[1] = RED;
+    }
+  }else{
+    if(rg > G_BORDER){
+      Line_Sensor[1] = GREEN;
+    }else{
+      Line_Sensor[1] = BLACK;
+    }
+  }
+  //left
+  if(lr > R_BORDER){
+    if(lg > G_BORDER){
+      Line_Sensor[3] = WHITE;
+    }else{
+      Line_Sensor[3] = RED;
+    }
+  }else{
+    if(lg > G_BORDER){
+      Line_Sensor[3] = GREEN;
+    }else{
+      Line_Sensor[3] = BLACK;
+    }
+  }
+  //TPR-r
+  if(tpr_r > TPR_BORDER){
+    Line_Sensor[0] = BLACK;
+  }else{
+    Line_Sensor[0] = WHITE;
+  }
+  //TPR-m
+  if(tpr_r > TPR_BORDER){
+    Line_Sensor[2] = BLACK;
+  }else{
+    Line_Sensor[2] = WHITE;
+  }
+  //TPR-l
+  if(tpr_r > TPR_BORDER){
+    Line_Sensor[4] = BLACK;
+  }else{
+    Line_Sensor[4] = WHITE;
+  }
+  //silver
+  if(silver < SILVER_BORDER){
+    isTraceing = false;
+  }
+}
+
+void motor_write(int right,int left){
+  //right
+  if(right == 0){
+    digitalWrite(P_M_A1,LOW);
+    digitalWrite(P_M_A2,LOW);
+  }else if(right > 0){
+    digitalWrite(P_M_A1,HIGH);
+    digitalWrite(P_M_A2,LOW);
+    analogWrite(P_M_APWM,right);
+  }else{
+    digitalWrite(P_M_A1,LOW);
+    digitalWrite(P_M_A2,HIGH);
+    analogWrite(P_M_APWM,right);
+  }
+  //left
+  if(left == 0){
+    digitalWrite(P_M_B1,LOW);
+    digitalWrite(P_M_B2,LOW);
+  }else if(right > 0){
+    digitalWrite(P_M_B1,HIGH);
+    digitalWrite(P_M_B2,LOW);
+    analogWrite(P_M_BPWM,left);
+  }else{
+    digitalWrite(P_M_B1,LOW);
+    digitalWrite(P_M_B2,HIGH);
+    analogWrite(P_M_BPWM,left);
+  }
 }
 
 void loop() {
@@ -247,6 +333,12 @@ void loop() {
   Serial.print('\n');
   return;
   #endif
-  color_read();
-  
+  if(isTraceing){//ライントレースプログラム
+    color_read();
+    judge_color();
+    if(!isTraceing)return;
+    
+  }else{//救助プログラム
+
+  }
 }
