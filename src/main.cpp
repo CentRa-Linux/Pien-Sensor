@@ -1,5 +1,44 @@
+/*///////////////////////////////////////////////
+//ピン配置
+//SDA&SCL:I2C
+//A6~A11:tpr-r,tpr-m,tpr-l,silver,tpr-back-r,tpr-back-l
+//D2,D3:Motor Driver(PWM)
+//D4~D7:Motor Driver(Digital)
+//D22,D24:Sonic Sensor(Trig)
+//D23,D25:Sonic Sensor(Echo)
+//D26~D30:Touch Sensor
+//
+//
+//
+//
+//
+///////////////////////////////////////////////*/
 #include <Arduino.h>
 #include <Wire.h>
+#include <PCA9685.h>
+
+//ピン指定
+#define P_TPR_R A6
+#define P_TPR_M A7
+#define P_TPR_L A8
+#define P_SILVER A9
+#define P_TPR_BR A10
+#define P_TPR_BL A11
+#define P_M_APWM 2
+#define P_M_A1 4
+#define P_M_A2 5
+#define P_M_BPWM 3
+#define P_M_B1 6
+#define P_M_B2 7
+#define P_S_RT 22
+#define P_S_LT 24
+#define P_S_RE 23
+#define P_S_LE 25
+#define P_T_R 26
+#define P_T_M 27
+#define P_T_L 28
+#define P_T_BR 29
+#define P_T_BL 30
 
 //アドレス指定
 #define S11059_ADDR 0x2A
@@ -7,12 +46,14 @@
 #define CONTROL_1_LSB 0x89
 #define CONTROL_2_LSB 0x09
 #define SENSOR_REGISTER 0x03
+//debug
+#define COLOR_DEBUG
 
 //Enum
-enum Color{black,white,green,red,silver};
+enum Color{BLACK,WHITE,GREEN,RED,SILVER};
 
 //int
-int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir;
+int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r;
 
 // カラーセンサー2個に対し2個i2cのチャネルを贅沢に作らないと行けないっぽい
 void test_sensor_setup(){
@@ -66,6 +107,28 @@ void change_i2c_port(int byte){
 }
 
 void setup() {
+  //ピンリセット
+  pinMode(P_TPR_R,INPUT);
+  pinMode(P_TPR_M,INPUT);
+  pinMode(P_TPR_L,INPUT);
+  pinMode(P_SILVER,INPUT);
+  pinMode(P_TPR_BR,INPUT);
+  pinMode(P_TPR_BL,INPUT);
+  pinMode(P_M_APWM,OUTPUT);
+  pinMode(P_M_A1,OUTPUT);
+  pinMode(P_M_A2,OUTPUT);
+  pinMode(P_M_BPWM,OUTPUT);
+  pinMode(P_M_B1,OUTPUT);
+  pinMode(P_M_B2,OUTPUT);
+  pinMode(P_S_RT,OUTPUT);
+  pinMode(P_S_LT,OUTPUT);
+  pinMode(P_S_RE,INPUT);
+  pinMode(P_S_LE,INPUT);
+  pinMode(P_T_R,INPUT);
+  pinMode(P_T_M,INPUT);
+  pinMode(P_T_L,INPUT);
+  pinMode(P_T_BR,INPUT);
+  pinMode(P_T_BL,INPUT);
   // シリアル開始
   Serial.begin(9600);
   //テスト
@@ -97,6 +160,7 @@ void setup() {
 }
 
 void color_read(){
+  //カラーセンサー読み取り
   change_i2c_port(0);
   Wire.beginTransmission(S11059_ADDR);
   Wire.write(SENSOR_REGISTER);
@@ -147,6 +211,24 @@ void color_read(){
     lir = higher << 8 | lower;
   }
   Wire.endTransmission();
+
+  //銀検知読み取り
+
+  //TPR105読み取り
+
+}
+
+void judge_color(){
+  #define r_border
+  #define g_border
+  #define b_border
+  #define ir_border
+}
+
+void loop() {
+  //カラーセンサー読み取り
+  #ifdef COLOR_DEBUG
+  color_read();
   Serial.print(lr);
   Serial.print(',');
   Serial.print(lg);
@@ -163,82 +245,8 @@ void color_read(){
   Serial.print(',');
   Serial.print(rir);
   Serial.print('\n');
-}
-
-void loop() {
-  //テスト
-  color_read();
-  //test_sensor_loop();
   return;
-  /*// 変数宣言
-  int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir;
-  delay(10);
-  // 出力データバイトを指定
-  LSWire.beginTransmission(S11059_ADDR);
-  LSWire.write(SENSOR_REGISTER);
-  LSWire.endTransmission();
-  RSWire.beginTransmission(S11059_ADDR);
-  RSWire.write(SENSOR_REGISTER);
-  RSWire.endTransmission();
-  // 8バイトを要求し、大丈夫であれば上部、下部バイトと読み込み、それぞれの色の変数に入れる
-  // 左側
-  LSWire.requestFrom(S11059_ADDR, 8);
-  if (LSWire.available()) {
-    // 赤
-    higher = LSWire.read();
-    lower = LSWire.read();
-    lr = higher << 8 | lower;
-    // 緑
-    higher = LSWire.read();
-    lower = LSWire.read();
-    lg = higher << 8 | lower;
-    // 青
-    higher = LSWire.read();
-    lower = LSWire.read();
-    lb = higher << 8 | lower;
-    // 赤外線
-    higher = LSWire.read();
-    lower = LSWire.read();
-    lir = higher << 8 | lower;
-  }
-  LSWire.endTransmission();
-  //右側
-  RSWire.requestFrom(S11059_ADDR, 8);
-  if (RSWire.available()) {
-    // 赤
-    higher = RSWire.read();
-    lower = RSWire.read();
-    rr = higher << 8 | lower;
-    // 緑
-    higher = RSWire.read();
-    lower = RSWire.read();
-    rg = higher << 8 | lower;
-    // 青
-    higher = RSWire.read();
-    lower = RSWire.read();
-    rb = higher << 8 | lower;
-    // 赤外線
-    higher = RSWire.read();
-    lower = RSWire.read();
-    rir = higher << 8 | lower;
-  }
-  RSWire.endTransmission();
-  // それぞれの値をカンマ区切りで改行までシリアルで送信
-  // 右左それぞれ、赤、緑、青、赤外線と出す
-  Serial.print(lr);
-  Serial.print(',');
-  Serial.print(lg);
-  Serial.print(',');
-  Serial.print(lb);
-  Serial.print(',');
-  Serial.print(lir);
-  Serial.print(',');
-  Serial.print(rr);
-  Serial.print(',');
-  Serial.print(rg);
-  Serial.print(',');
-  Serial.print(rb);
-  Serial.print(',');
-  Serial.print(rir);
-  Serial.print('\n');*/
+  #endif
+  color_read();
+  
 }
