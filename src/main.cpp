@@ -44,6 +44,7 @@
 #define CONTROL_1_LSB 0x89
 #define CONTROL_2_LSB 0x09
 #define SENSOR_REGISTER 0x03
+#define BMX_MAG 0x13
 //debug
 #define COLOR_DEBUG
 
@@ -51,7 +52,7 @@
 enum Color{BLACK,WHITE,GREEN,RED,SILVER};
 
 //int
-int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r;
+int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r,xMag,yMag,zMag = 0;
 
 //右から左へ
 Color Line_Sensor[5];
@@ -110,7 +111,56 @@ void change_i2c_port(int byte){
   Wire.endTransmission();
 }
 
+void bmx_init(){
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x4B);  // Select Mag register
+  Wire.write(0x83);  // Soft reset
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x4B);  // Select Mag register
+  Wire.write(0x01);  // Soft reset
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x4C);  // Select Mag register
+  Wire.write(0x00);  // Normal Mode, ODR = 10 Hz
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x4E);  // Select Mag register
+  Wire.write(0x84);  // X, Y, Z-Axis enabled
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x51);  // Select Mag register
+  Wire.write(0x04);  // No. of Repetitions for X-Y Axis = 9
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x52);  // Select Mag register
+  Wire.write(0x16);  // No. of Repetitions for Z-Axis = 15
+  Wire.endTransmission();
+}
+
+void bmx_read(){
+  unsigned int data[8];
+  for(int i = 0;i < 8;i++){
+    Wire.beginTransmission(BMX_MAG);
+    Wire.write(0x42 + i);
+    Wire.endTransmission();
+    Wire.requestFrom(BMX_MAG,1);
+    if(Wire.available() == 1){
+      data[i] = Wire.read();
+    }
+  }
+  xMag = ((data[1] << 5) | (data[0] >> 3));
+  if(xMag > 4095)xMag -= 8192;
+  yMag = ((data[3] << 5) | (data[2] >> 3));
+  if(yMag > 4095)yMag -= 8192;
+  zMag = ((data[5] << 7) | (data[4] >> 1));
+  if(zMag > 16383)zMag -= 32768;
+}
+
 void setup() {
+  #ifdef COLOR_DEBUG
+  //ほげー
+  #endif
   //ピンリセット
   pinMode(P_TPR_R,INPUT);
   pinMode(P_TPR_M,INPUT);
@@ -133,9 +183,6 @@ void setup() {
   pinMode(P_T_B,INPUT);
   // シリアル開始
   Serial.begin(9600);
-  //テスト
-  //test_sensor_setup();
-  //return;
   //I2Cスタート
   Wire.begin();
   change_i2c_port(0);
@@ -158,7 +205,6 @@ void setup() {
   Wire.write(CONTROL_MSB);
   Wire.write(CONTROL_2_LSB);
   Wire.endTransmission();
-
 }
 
 void color_read(){
@@ -311,6 +357,39 @@ void motor_write(int right,int left){
   }
 }
 
+void detect_green(){
+  bool isRightGreen,isLeftGreen;
+      Line_Sensor[1] == GREEN ? isRightGreen = true : isRightGreen = false;
+      Line_Sensor[3] == GREEN ? isLeftGreen = true : isLeftGreen = false;
+      motor_write(0,0);
+      delay(500);
+      motor_write(64,64);
+      while(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
+        color_read();
+        judge_color();
+      }
+      motor_write(0,0);
+      color_read();
+      judge_color();
+      if(Line_Sensor[2] == WHITE){
+        Serial.println("What's wrong??? There is no detecton on middle sensor.");
+      }
+      if(Line_Sensor[0] == WHITE && Line_Sensor[4] == WHITE){
+        //フェイク交差点だったとき
+        Serial.println("An Fatal Error Has Occured.Program Will Exit.Stop Code:Black Line Not Found");
+        return;
+      }else{
+        //THE☆交差点
+        if(isRightGreen && isLeftGreen){
+          //180ターン
+        }else if(isRightGreen && !isLeftGreen){
+          //右に90ターン
+        }else if(!isRightGreen && isLeftGreen){
+          //左に90ターン
+        }
+      }
+}
+
 void loop() {
   //カラーセンサー読み取り
   #ifdef COLOR_DEBUG
@@ -353,25 +432,9 @@ void loop() {
       delay(1000000);
     }else if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
       //緑処理
-      bool isRightGreen,isLeftGreen;
-      Line_Sensor[1] == GREEN ? isRightGreen = true : isRightGreen = false;
-      Line_Sensor[3] == GREEN ? isLeftGreen = true : isLeftGreen = false;
-      motor_write(0,0);
-      delay(500);
-      motor_write(64,64);
-      while(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
-        color_read();
-        judge_color();
-      }
-      motor_write(0,0);
-      color_read();
-      judge_color();
-      if(Line_Sensor[2] != BLACK)Serial.println("An Fatal Error Has Occured.Program Will Exit.Stop Code:Black Line Not Found");
+      detect_green();
     }else{
-      if(Line_Sensor[1] == BLACK || Line_Sensor[3] == BLACK){
-      }
+      Serial.println("Strange Error:No Color Found");
     }
-  }else{//救助プログラム
-
   }
 }
