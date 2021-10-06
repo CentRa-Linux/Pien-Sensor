@@ -8,7 +8,7 @@
 //D23,D25:Sonic Sensor(Echo)
 //D26~D29:Touch Sensor
 //motor_write()の最大値は256
-//
+//タッチセンサーの値は反転するので注意
 //
 //
 //
@@ -390,6 +390,77 @@ void detect_green(){
       }
 }
 
+bool touch_sensor(){
+  bool isTouched = false;
+  digitalRead(P_T_M) == LOW ? isTouched = true : isTouched = isTouched;
+  return isTouched;
+}
+
+double sonic_sensor_right(){
+  double du,dis = 0;
+  digitalWrite(P_S_RT,LOW);
+  delayMicroseconds(2);
+  digitalWrite(P_S_RT,HIGH);
+  delayMicroseconds(10);
+  digitalWrite(P_S_RT,LOW);
+  du = pulseIn(P_S_RE,HIGH);
+  if(du > 0){
+    du = du / 2;
+    dis = du * 340 * 100 / 1000000;
+  }
+  return dis;
+}
+
+double sonic_sensor_left(){
+  double du,dis = 0;
+  digitalWrite(P_S_LT,LOW);
+  delayMicroseconds(2);
+  digitalWrite(P_S_LT,HIGH);
+  delayMicroseconds(10);
+  digitalWrite(P_S_LT,LOW);
+  du = pulseIn(P_S_LE,HIGH);
+  if(du > 0){
+    du = du / 2;
+    dis = du * 340 * 100 / 1000000;
+  }
+  return dis;
+}
+
+void avoid_object(){
+  const double distance = 5.0;
+  const double allow_miss = 3.0;
+  motor_write(0,0);
+  delay(100);
+  motor_write(-64,-64);
+  delay(500);
+  motor_write(0,0);
+  delay(100);
+  //90度回転
+  //あとでね
+  //右を障害物に向けるよ
+  motor_write(64,64);
+  delay(100);
+  while(Line_Sensor[0] == WHITE && Line_Sensor[2] == WHITE && Line_Sensor[4] == WHITE){
+    if(sonic_sensor_right() > distance + allow_miss){
+      //遠くなってるなら
+      motor_write(48,64);
+    }else if(sonic_sensor_right() < distance){
+      //近くなってるなら
+      motor_write(64,48);
+    }else{
+      //範囲内なら
+      motor_write(64,64);
+    }
+    color_read();
+    judge_color();
+  }
+  motor_write(0,0);
+  //向きを戻すよ
+  motor_write(-64,-64);
+  while(digitalRead(P_T_B) == HIGH);
+  motor_write(0,0);
+}
+
 void loop() {
   //カラーセンサー読み取り
   #ifdef COLOR_DEBUG
@@ -416,14 +487,22 @@ void loop() {
     color_read();
     judge_color();
     if(!isTraceing)return;
+    if(touch_sensor()){
+      //回避動作開始
+      avoid_object();
+      return;
+    }
     //特殊処理発生かどうか知りたい
     if((Line_Sensor[1] == WHITE || Line_Sensor[1] == BLACK) 
         && (Line_Sensor[3] == WHITE || Line_Sensor[3] == BLACK)){
       //白黒処理
-      int right_value,left_value,right_colored,left_colored;
-      right_colored = (rr + rg + rb) / 3;//だいたい最大値256-512くらい？
-      left_colored = (lr + lg + lb) / 3;
-
+      if(Line_Sensor[2] == BLACK){
+        //真ん中黒
+        //がんばえ
+      }else{
+        //真ん中白
+        //がんばえ
+      }
       //右のP制御値
       //この辺は要検討
     }else if(Line_Sensor[1] == RED || Line_Sensor[3] == RED){
