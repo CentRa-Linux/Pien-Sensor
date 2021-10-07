@@ -45,11 +45,18 @@
 #define CONTROL_2_LSB 0x09
 #define SENSOR_REGISTER 0x03
 #define BMX_MAG 0x13
+#define PCA9685_ADDR 0x41
+
 //debug
 #define COLOR_DEBUG
 
+//Servo's Hz Min And Max
+#define SERVO_MIN 150
+#define SERVO_MAX 500
+
 //Enum
 enum Color{BLACK,WHITE,GREEN,RED,SILVER};
+enum Bucket{RAISE,DOWN,RELEASE};
 
 //int
 int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r,xMag,yMag,zMag = 0;
@@ -59,6 +66,9 @@ Color Line_Sensor[5];
 
 //走行モード切替
 bool isTraceing = true;
+
+//PCA9685変数
+PCA9685 servo = PCA9685(0x41);
 
 // カラーセンサー2個に対し2個i2cのチャネルを贅沢に作らないと行けないっぽい
 void test_sensor_setup(){
@@ -161,7 +171,7 @@ void setup() {
   #ifdef COLOR_DEBUG
   //ほげー
   #endif
-  //ピンリセット
+  //ピンセット
   pinMode(P_TPR_R,INPUT);
   pinMode(P_TPR_M,INPUT);
   pinMode(P_TPR_L,INPUT);
@@ -205,6 +215,10 @@ void setup() {
   Wire.write(CONTROL_MSB);
   Wire.write(CONTROL_2_LSB);
   Wire.endTransmission();
+  //地磁気センサーリセット
+  bmx_init();
+  //サーボ初期化
+  servo.setPWMFreq(50);
 }
 
 void color_read(){
@@ -388,6 +402,20 @@ void detect_green(){
           //左に90ターン
         }
       }
+}
+
+void servo_write(Bucket mode){
+  if(mode == RAISE){
+    servo.setPWM(0,0,SERVO_MAX);
+    servo.setPWM(1,0,SERVO_MAX);
+  }else if(mode == DOWN){
+    servo.setPWM(0,0,SERVO_MIN);
+    servo.setPWM(1,0,SERVO_MIN);
+  }else if(mode == RELEASE){
+    servo.setPWM(2,0,SERVO_MAX);
+    delay(2000);
+    servo.setPWM(2,0,SERVO_MIN);
+  }
 }
 
 bool touch_sensor(){
