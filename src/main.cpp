@@ -48,78 +48,38 @@
 #define PCA9685_ADDR 0x41
 
 //debug
-#define COLOR_DEBUG
+//#define COLOR_DEBUG
 
 //Servo's Hz Min And Max
 #define SERVO_MIN 150
 #define SERVO_MAX 500
 
+//三角コーナー探すモードかどうか
+#define CORNER_BORDER 3
+
 //Enum
 enum Color{BLACK,WHITE,GREEN,RED,SILVER};
-enum Bucket{RAISE,DOWN,RELEASE};
+enum Bucket{RAISE,DOWN,RELEASE,HOLD};
+enum State{TRACE,RESCUE,CORNER};
 
 //int
-int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r,xMag,yMag,zMag = 0;
+int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r,xMag,yMag,zMag,count = 0;
+
+//bmxのオフセット
+const int bmx_x_os = 30;
+const int bmx_y_os = -40;
 
 //右から左へ
 Color Line_Sensor[5];
 
 //走行モード切替
-bool isTraceing = true;
+State state = TRACE;
 
 //PCA9685変数
 PCA9685 servo = PCA9685(0x41);
 
-// カラーセンサー2個に対し2個i2cのチャネルを贅沢に作らないと行けないっぽい
-void test_sensor_setup(){
-  Wire.begin();
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(CONTROL_MSB);
-  Wire.write(CONTROL_1_LSB);
-  Wire.endTransmission();
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(CONTROL_MSB);
-  Wire.write(CONTROL_2_LSB);
-  Wire.endTransmission();
-}
-void test_sensor_loop(){
-  int low,high,r,g,b,ir;
-  delay(10);
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(SENSOR_REGISTER);
-  Wire.endTransmission();
-  Wire.requestFrom(S11059_ADDR,8);
-  if(Wire.available()){
-    high = Wire.read();
-    low = Wire.read();
-    r = high << 8 | low;
-    high = Wire.read();
-    low = Wire.read();
-    g = high << 8 | low;
-    high = Wire.read();
-    low = Wire.read();
-    b = high << 8 | low;
-    high = Wire.read();
-    low = Wire.read();
-    ir = high << 8 | low;
-  }
-  Wire.endTransmission();
-  Serial.print(r);
-  Serial.print(",");
-  Serial.print(g);
-  Serial.print(",");
-  Serial.print(b);
-  Serial.print(",");
-  Serial.print(ir);
-  Serial.print('\n');  
-}
-
-//TCA9548A
-void change_i2c_port(int byte){
-  Wire.beginTransmission(0x70);
-  Wire.write(1 << byte);
-  Wire.endTransmission();
-}
+//silver
+bool isSilver = false;
 
 void bmx_init(){
   Wire.beginTransmission(BMX_MAG);
@@ -165,11 +125,94 @@ void bmx_read(){
   if(yMag > 4095)yMag -= 8192;
   zMag = ((data[5] << 7) | (data[4] >> 1));
   if(zMag > 16383)zMag -= 32768;
+  xMag += bmx_x_os;
+  yMag += bmx_y_os;
+}
+
+void bmx_fixer(){
+}
+
+void test_sensor_setup(){
+  Serial.begin(9600);
+  Wire.begin();
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(CONTROL_MSB);
+  Wire.write(CONTROL_1_LSB);
+  Wire.endTransmission();
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(CONTROL_MSB);
+  Wire.write(CONTROL_2_LSB);
+  Wire.endTransmission();
+  bmx_init();
+  Serial.println("uwu");
+}
+void test_sensor_loop(){/*
+  int low,high,r,g,b,ir;
+  delay(10);
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(SENSOR_REGISTER);
+  Wire.endTransmission();
+  Wire.requestFrom(S11059_ADDR,8);
+  if(Wire.available()){
+    high = Wire.read();
+    low = Wire.read();
+    r = high << 8 | low;
+    high = Wire.read();
+    low = Wire.read();
+    g = high << 8 | low;
+    high = Wire.read();
+    low = Wire.read();
+    b = high << 8 | low;
+    high = Wire.read();
+    low = Wire.read();
+    ir = high << 8 | low;
+  }
+  Wire.endTransmission();
+  Serial.print(r);
+  Serial.print(",");
+  Serial.print(g);
+  Serial.print(",");
+  Serial.print(b);
+  Serial.print(",");
+  Serial.print(ir);
+  Serial.print('\n');*/
+  bmx_read();
+  Serial.print(xMag);
+  Serial.print(",");
+  Serial.print(yMag);
+  Serial.print(",");
+  Serial.println(atan2(yMag,xMag) * 180 / PI);
+}
+
+//TCA9548A
+void change_i2c_port(int byte){
+  Wire.beginTransmission(0x70);
+  Wire.write(1 << byte);
+  Wire.endTransmission();
+}
+
+void servo_write(Bucket mode){
+  if(mode == RAISE){
+    servo.setPWM(0,0,SERVO_MAX);
+    servo.setPWM(1,0,SERVO_MAX);
+  }else if(mode == DOWN){
+    servo.setPWM(0,0,SERVO_MIN);
+    servo.setPWM(1,0,SERVO_MIN);
+  }else if(mode == RELEASE){
+    servo.setPWM(2,0,SERVO_MAX);
+  }else if(mode == HOLD){
+    servo.setPWM(2,0,SERVO_MIN);
+  }
+  delay(500);
 }
 
 void setup() {
+  test_sensor_setup();
+  return;
   #ifdef COLOR_DEBUG
   //ほげー
+  test_sensor_setup();
+  return;
   #endif
   //ピンセット
   pinMode(P_TPR_R,INPUT);
@@ -219,6 +262,7 @@ void setup() {
   bmx_init();
   //サーボ初期化
   servo.setPWMFreq(50);
+  servo_write(RAISE);
 }
 
 void color_read(){
@@ -338,7 +382,7 @@ void judge_color(){
   }
   //silver
   if(silver < SILVER_BORDER){
-    isTraceing = false;
+    isSilver = true;
   }
 }
 
@@ -371,6 +415,41 @@ void motor_write(int right,int left){
   }
 }
 
+void rotate(int angle){
+  motor_write(0,0);
+  delay(250);
+  bmx_read();
+  int n_angle = atan2(yMag,xMag) * 180 / PI;
+  int target = n_angle + angle;
+  if(angle > 0){
+    //時計回り
+    motor_write(-64,64);
+    while(abs(target - n_angle) > abs(target) * 0.1){
+      bmx_read();
+      n_angle = atan2(yMag,xMag) * 180 / PI;
+    }
+  }else if(angle < 0){
+    //反時計回り
+    motor_write(64,-64);
+    while(abs(target - n_angle) > abs(target) * 0.1){
+      bmx_read();
+      n_angle = atan2(yMag,xMag) * 180 / PI;
+    }
+  }else return;
+  motor_write(0,0);
+}
+
+void rotate_target(int target){
+  bmx_read();
+  int ang = atan2(yMag,xMag) * 180 / PI;
+  rotate(target - ang);
+}
+
+void go_straight(int val){
+  //必要になったら書こう
+  //まっすぐ進むためのコード
+}
+
 void detect_green(){
   bool isRightGreen,isLeftGreen;
       Line_Sensor[1] == GREEN ? isRightGreen = true : isRightGreen = false;
@@ -396,26 +475,15 @@ void detect_green(){
         //THE☆交差点
         if(isRightGreen && isLeftGreen){
           //180ターン
+          rotate(180);
         }else if(isRightGreen && !isLeftGreen){
           //右に90ターン
+          rotate(90);
         }else if(!isRightGreen && isLeftGreen){
           //左に90ターン
+          rotate(-90);
         }
       }
-}
-
-void servo_write(Bucket mode){
-  if(mode == RAISE){
-    servo.setPWM(0,0,SERVO_MAX);
-    servo.setPWM(1,0,SERVO_MAX);
-  }else if(mode == DOWN){
-    servo.setPWM(0,0,SERVO_MIN);
-    servo.setPWM(1,0,SERVO_MIN);
-  }else if(mode == RELEASE){
-    servo.setPWM(2,0,SERVO_MAX);
-    delay(2000);
-    servo.setPWM(2,0,SERVO_MIN);
-  }
 }
 
 bool touch_sensor(){
@@ -464,8 +532,8 @@ void avoid_object(){
   motor_write(0,0);
   delay(100);
   //90度回転
-  //あとでね
   //右を障害物に向けるよ
+  rotate(-90);
   motor_write(64,64);
   delay(100);
   while(Line_Sensor[0] == WHITE && Line_Sensor[2] == WHITE && Line_Sensor[4] == WHITE){
@@ -484,14 +552,118 @@ void avoid_object(){
   }
   motor_write(0,0);
   //向きを戻すよ
+  rotate(-90);
   motor_write(-64,-64);
   while(digitalRead(P_T_B) == HIGH);
   motor_write(0,0);
 }
 
+void looking_corner(){
+  //三角コーナーからの逃亡コード
+  servo_write(DOWN);
+  motor_write(128,128);
+  while(digitalRead(P_T_R) == HIGH && digitalRead(P_T_L) == HIGH){
+    //まっすぐ進む
+    motor_write(128,128);
+    color_read();
+    judge_color();
+    if(Line_Sensor[1] != WHITE || Line_Sensor[3] != WHITE || isSilver){
+      motor_write(0,0);
+      delay(500);
+      rotate(90);
+      return;
+    }
+  }
+  delay(500);
+  motor_write(0,0);
+  if(digitalRead(P_T_R) == LOW && digitalRead(P_T_L) == LOW){
+    //違うらしいよ
+    //右に回転
+    rotate(90);
+    return;
+  }
+  else{
+    bmx_read();
+    int this_ang = atan2(yMag,xMag) * 180 / PI; 
+    if(digitalRead(P_T_R == HIGH)){
+      //時計回りに135度回転
+      rotate(135);
+    }else{
+      //反時計回りに135度回転
+      rotate(-135);
+    }
+    motor_write(-64,-64);
+    while(digitalRead(P_T_B) == HIGH);
+    delay(500);
+    motor_write(0,0);
+    if(analogRead(P_TPR_B) > TPR_BORDER){
+      //黒の時
+      servo_write(RELEASE);
+      delay(1500);
+      servo_write(HOLD);
+      for(int i = 0;i < 3;i++){
+        motor_write(128,128);
+        delay(500);
+        motor_write(0,0);
+        delay(250);
+        motor_write(-128,-128);
+        while(digitalRead(P_T_B) == HIGH);
+        motor_write(0,0);
+        servo_write(RELEASE);
+        delay(1500);
+        servo_write(HOLD);
+        servo_write(RAISE);
+        delay(250);
+      }
+      //右を向く(絶対値)
+      int tar = this_ang + 90;
+      if(tar > 180)tar -= 360;
+      rotate_target(tar);
+      color_read();
+      judge_color();
+      motor_write(192,192);
+      while(Line_Sensor[1] == WHITE && Line_Sensor[3] == WHITE){
+        color_read();
+        judge_color();
+        if(Line_Sensor[1] != WHITE || Line_Sensor[3] != WHITE || isSilver){
+          if(isSilver){
+            //銀なので間違い
+            isSilver = false;
+            motor_write(0,0);
+            delay(250);
+            motor_write(-64,-64);
+            delay(250);
+            motor_write(0,0);
+            //右に回転
+            rotate(90);
+            motor_write(192,192);
+          }else if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
+            //脱出完了
+            delay(100);
+            state == TRACE;
+            return;
+          }
+        }
+        if(analogRead(P_T_M) == LOW){
+          //壁にぶつかった時
+          motor_write(0,0);
+          delay(250);
+          //右に回転
+          rotate(90);
+          motor_write(192,192);
+        }
+      }
+    }
+  }
+}
+
 void loop() {
+  test_sensor_loop();
+  return;
   //カラーセンサー読み取り
   #ifdef COLOR_DEBUG
+  test_sensor_loop();
+  return;
   color_read();
   Serial.print(lr);
   Serial.print(',');
@@ -511,10 +683,14 @@ void loop() {
   Serial.print('\n');
   return;
   #endif
-  if(isTraceing){//ライントレースプログラム
+  if(state == TRACE){//ライントレースプログラム
     color_read();
     judge_color();
-    if(!isTraceing)return;
+    if(isSilver){
+      isSilver = false;
+      state == RESCUE;
+      return;
+    }
     if(touch_sensor()){
       //回避動作開始
       avoid_object();
@@ -527,12 +703,34 @@ void loop() {
       if(Line_Sensor[2] == BLACK){
         //真ん中黒
         //がんばえ
+        if(Line_Sensor[1] == WHITE && Line_Sensor[3] == WHITE){
+          //完璧なので喘息前進ダ！
+          motor_write(192,192);
+        }
+        else{
+          //互いに白黒の時なのでP制御
+          int right_value = (rr + rg + rb) / 3;
+          int left_value = (lr + lg + lb) / 3;
+          motor_write(right_value,left_value);
+        }
       }else{
         //真ん中白
         //がんばえ
+        if(Line_Sensor[0] == WHITE && Line_Sensor[1] == WHITE 
+          && Line_Sensor[3] == WHITE && Line_Sensor[4] == WHITE){
+            //全部白の時の処理
+            //直進だよ！
+            motor_write(192,192);
+          }else{
+            //どれかが黒の時
+            int right_value,left_value = 0;
+            Line_Sensor[0] == WHITE ? left_value = left_value : left_value = 128;
+            Line_Sensor[1] == WHITE ? left_value = left_value : left_value = 64;
+            Line_Sensor[3] == WHITE ? right_value = right_value : right_value = 64;
+            Line_Sensor[4] == WHITE ? right_value = right_value : right_value = 128;
+            motor_write(right_value,left_value);
+          }
       }
-      //右のP制御値
-      //この辺は要検討
     }else if(Line_Sensor[1] == RED || Line_Sensor[3] == RED){
       //赤処理
       motor_write(0,0);
@@ -543,5 +741,55 @@ void loop() {
     }else{
       Serial.println("Strange Error:No Color Found");
     }
+  }else if(state == RESCUE){
+    //救助コード
+    if((int)sonic_sensor_right() < CORNER_BORDER || (int)sonic_sensor_left < CORNER_BORDER){
+      //壁にぎりぎりなら
+      if(count == 0);
+      else{
+        //三角コーナー探すモード切替
+        state = CORNER;
+        return;
+      }
+    }
+    motor_write(0,0);
+    servo_write(DOWN);
+    double r_soinc,l_sonic;
+    r_soinc = sonic_sensor_right();
+    l_sonic = sonic_sensor_left();
+    motor_write(128,128);
+    while(digitalRead(P_T_R) == HIGH && digitalRead(P_T_L) == HIGH){
+      int r_er = sonic_sensor_right() - r_soinc;
+      int l_er = sonic_sensor_left() - l_sonic;
+      motor_write(128 + l_er,128 + r_er);
+    }
+    //この辺どうしよう、バケットの負荷大丈夫？
+    //もしあれなら超音波使ったほうがいいかもね
+    delay(500);
+    motor_write(0,0);
+    delay(100);
+    servo_write(RAISE);
+    if(count % 2 == 0){
+      //もし奇数回目なら左に回転？
+      rotate(-90);
+      motor_write(64,64);
+      delay(1000);
+      motor_write(0,0);
+      rotate(-90);
+      //その後左に回転
+    }else{
+      //もし偶数回目なら右に回転？
+      rotate(90);
+      motor_write(64,64);
+      delay(1000);
+      motor_write(0,0);
+      rotate(90);
+      //その後右に回転
+    }
+    count++;
+  }else if(state == CORNER){
+    //右に回転
+    rotate(90);
+    looking_corner();
   }
 }
