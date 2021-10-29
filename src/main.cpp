@@ -657,6 +657,33 @@ void looking_corner(){
   }
 }
 
+void p_trace(){
+  //センサーの位置で係数を変える
+  int Line_Value[5];
+  int right,left = 128;
+  //外側は変化量128にしたい
+  #define OUTLINE 16
+  //内側は変化量64にしたい
+  #define INLINE 28
+  //黒のほうが高い
+  //tpr max:1024
+  Line_Value[0] = 1024 - tpr_r;
+  Line_Value[2] = 1024 - tpr_m;
+  Line_Value[4] = 1024 - tpr_l;
+  //color max:about 864
+  Line_Value[1] = (rr + rg + rb) / 3;
+  Line_Value[3] = (lr + lg + lb) / 3;
+  right += Line_Value[0] / OUTLINE;
+  left -= Line_Value[0] / OUTLINE;
+  right += Line_Value[1] / INLINE;
+  left -= Line_Value[1] / INLINE;
+  right -= Line_Value[3] / INLINE;
+  left += Line_Value[3] / INLINE;
+  right -= Line_Value[4] / OUTLINE;
+  left += Line_Value[4] / OUTLINE;
+  motor_write(right,left);
+}
+
 void loop() {
   test_sensor_loop();
   return;
@@ -709,9 +736,7 @@ void loop() {
         }
         else{
           //互いに白黒の時なのでP制御
-          int right_value = (rr + rg + rb) / 3;
-          int left_value = (lr + lg + lb) / 3;
-          motor_write(right_value,left_value);
+          p_trace();
         }
       }else{
         //真ん中白
@@ -723,12 +748,7 @@ void loop() {
             motor_write(192,192);
           }else{
             //どれかが黒の時
-            int right_value,left_value = 0;
-            Line_Sensor[0] == WHITE ? left_value = left_value : left_value = 128;
-            Line_Sensor[1] == WHITE ? left_value = left_value : left_value = 64;
-            Line_Sensor[3] == WHITE ? right_value = right_value : right_value = 64;
-            Line_Sensor[4] == WHITE ? right_value = right_value : right_value = 128;
-            motor_write(right_value,left_value);
+            p_trace();
           }
       }
     }else if(Line_Sensor[1] == RED || Line_Sensor[3] == RED){
