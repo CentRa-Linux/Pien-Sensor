@@ -82,6 +82,7 @@ PCA9685 servo = PCA9685(0x41);
 bool isSilver = false;
 
 void bmx_init(){
+  change_i2c_port(2);
   Wire.beginTransmission(BMX_MAG);
   Wire.write(0x4B);  // Select Mag register
   Wire.write(0x83);  // Soft reset
@@ -109,6 +110,7 @@ void bmx_init(){
 }
 
 void bmx_read(){
+  change_i2c_port(2);
   unsigned int data[8];
   for(int i = 0;i < 8;i++){
     Wire.beginTransmission(BMX_MAG);
@@ -192,6 +194,7 @@ void change_i2c_port(int byte){
 }
 
 void servo_write(Bucket mode){
+  change_i2c_port(3);
   if(mode == RAISE){
     servo.setPWM(0,0,SERVO_MAX);
     servo.setPWM(1,0,SERVO_MAX);
