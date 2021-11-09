@@ -15,7 +15,7 @@
 ///////////////////////////////////////////////*/
 #include <Arduino.h>
 #include <Wire.h>
-#include <PCA9685.h>
+#include <Adafruit_PWMServoDriver.h>
 
 //ピン指定
 #define P_TPR_R A6
@@ -76,10 +76,78 @@ Color Line_Sensor[5];
 State state = TRACE;
 
 //PCA9685変数
-PCA9685 servo = PCA9685(0x41);
+Adafruit_PWMServoDriver servo = Adafruit_PWMServoDriver(0x41);
 
 //silver
 bool isSilver = false;
+
+//TCA9548A
+void change_i2c_port(int byte){
+  Wire.beginTransmission(0x70);
+  Wire.write(1 << byte);
+  Wire.endTransmission();
+}
+
+void color_read(){
+  //カラーセンサー読み取り
+  change_i2c_port(0);
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(SENSOR_REGISTER);
+  Wire.endTransmission();
+  change_i2c_port(1);
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(SENSOR_REGISTER);
+  Wire.endTransmission();
+  change_i2c_port(0);
+  Wire.requestFrom(S11059_ADDR,8);
+  if(Wire.available()){
+    //right-red
+    higher = Wire.read();
+    lower = Wire.read();
+    rr = higher << 8 | lower;
+    //right-green
+    higher = Wire.read();
+    lower = Wire.read();
+    rg = higher << 8 | lower;
+    //right-blue
+    higher = Wire.read();
+    lower = Wire.read();
+    rb = higher << 8 | lower;
+    //right-ir
+    higher = Wire.read();
+    lower = Wire.read();
+    rir = higher << 8 | lower;
+  }
+  Wire.endTransmission();
+  change_i2c_port(1);
+  Wire.requestFrom(S11059_ADDR,8);
+  if(Wire.available()){
+    //left-red
+    higher = Wire.read();
+    lower = Wire.read();
+    lr = higher << 8 | lower;
+    //left-green
+    higher = Wire.read();
+    lower = Wire.read();
+    lg = higher << 8 | lower;
+    //left-blue
+    higher = Wire.read();
+    lower = Wire.read();
+    lb = higher << 8 | lower;
+    //left-ir
+    higher = Wire.read();
+    lower = Wire.read();
+    lir = higher << 8 | lower;
+  }
+  Wire.endTransmission();
+
+  //銀検知読み取り
+  silver = analogRead(P_SILVER);
+  //TPR105読み取り
+  tpr_r = analogRead(P_TPR_R);
+  tpr_m = analogRead(P_TPR_M);
+  tpr_l = analogRead(P_TPR_L);
+}
 
 void bmx_init(){
   change_i2c_port(2);
@@ -148,6 +216,7 @@ void test_sensor_setup(){
   bmx_init();
   Serial.println("uwu");
 }
+
 void test_sensor_loop(){/*
   int low,high,r,g,b,ir;
   delay(10);
@@ -184,13 +253,6 @@ void test_sensor_loop(){/*
   Serial.print(yMag);
   Serial.print(",");
   Serial.println(atan2(yMag,xMag) * 180 / PI);
-}
-
-//TCA9548A
-void change_i2c_port(int byte){
-  Wire.beginTransmission(0x70);
-  Wire.write(1 << byte);
-  Wire.endTransmission();
 }
 
 void servo_write(Bucket mode){
@@ -266,67 +328,6 @@ void setup() {
   //サーボ初期化
   servo.setPWMFreq(50);
   servo_write(RAISE);
-}
-
-void color_read(){
-  //カラーセンサー読み取り
-  change_i2c_port(0);
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(SENSOR_REGISTER);
-  Wire.endTransmission();
-  change_i2c_port(1);
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(SENSOR_REGISTER);
-  Wire.endTransmission();
-  change_i2c_port(0);
-  Wire.requestFrom(S11059_ADDR,8);
-  if(Wire.available()){
-    //right-red
-    higher = Wire.read();
-    lower = Wire.read();
-    rr = higher << 8 | lower;
-    //right-green
-    higher = Wire.read();
-    lower = Wire.read();
-    rg = higher << 8 | lower;
-    //right-blue
-    higher = Wire.read();
-    lower = Wire.read();
-    rb = higher << 8 | lower;
-    //right-ir
-    higher = Wire.read();
-    lower = Wire.read();
-    rir = higher << 8 | lower;
-  }
-  Wire.endTransmission();
-  change_i2c_port(1);
-  Wire.requestFrom(S11059_ADDR,8);
-  if(Wire.available()){
-    //left-red
-    higher = Wire.read();
-    lower = Wire.read();
-    lr = higher << 8 | lower;
-    //left-green
-    higher = Wire.read();
-    lower = Wire.read();
-    lg = higher << 8 | lower;
-    //left-blue
-    higher = Wire.read();
-    lower = Wire.read();
-    lb = higher << 8 | lower;
-    //left-ir
-    higher = Wire.read();
-    lower = Wire.read();
-    lir = higher << 8 | lower;
-  }
-  Wire.endTransmission();
-
-  //銀検知読み取り
-  silver = analogRead(P_SILVER);
-  //TPR105読み取り
-  tpr_r = analogRead(P_TPR_R);
-  tpr_m = analogRead(P_TPR_M);
-  tpr_l = analogRead(P_TPR_L);
 }
 
 void judge_color(){
