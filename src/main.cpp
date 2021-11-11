@@ -18,10 +18,10 @@
 #include <Adafruit_PWMServoDriver.h>
 
 //ピン指定
-#define P_TPR_R A6
-#define P_TPR_M A7
-#define P_TPR_L A8
-#define P_SILVER A9
+#define P_TPR_R A12
+#define P_TPR_M A13
+#define P_TPR_L A14
+#define P_SILVER A15
 #define P_TPR_B A10
 #define P_M_APWM 2
 #define P_M_A1 4
@@ -45,7 +45,7 @@
 #define CONTROL_2_LSB 0x09
 #define SENSOR_REGISTER 0x03
 #define BMX_MAG 0x13
-#define PCA9685_ADDR 0x41
+#define PCA9685_ADDR 0x40
 
 //debug
 //#define COLOR_DEBUG
@@ -57,6 +57,10 @@
 //三角コーナー探すモードかどうか
 #define CORNER_BORDER 3
 
+//RCフィルタ(0 < x < 1)
+const float RC = 0.5;
+int before_x,before_y;
+
 //Enum
 enum Color{BLACK,WHITE,GREEN,RED,SILVER};
 enum Bucket{RAISE,DOWN,RELEASE,HOLD};
@@ -66,8 +70,8 @@ enum State{TRACE,RESCUE,CORNER};
 int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r,xMag,yMag,zMag,count = 0;
 
 //bmxのオフセット
-const int bmx_x_os = 30;
-const int bmx_y_os = -40;
+const int bmx_x_os = 20;
+const int bmx_y_os = 15;
 
 //右から左へ
 Color Line_Sensor[5];
@@ -86,6 +90,69 @@ void change_i2c_port(int byte){
   Wire.beginTransmission(0x70);
   Wire.write(1 << byte);
   Wire.endTransmission();
+}
+
+void judge_color(){
+  #define R_BORDER 200
+  #define G_BORDER 200
+  #define B_BORDER 200
+  #define IR_BORDER 200
+  #define TPR_BORDER 400
+  #define SILVER_BORDER 300
+  
+  Serial.print(silver);
+  Serial.print(",");
+  //I2C Color Sensor
+  //right
+  if(rr > R_BORDER){
+    if(rg > G_BORDER){
+      Line_Sensor[1] = WHITE;
+    }else{
+      Line_Sensor[1] = RED;
+    }
+  }else{
+    if(rg > G_BORDER){
+      Line_Sensor[1] = GREEN;
+    }else{
+      Line_Sensor[1] = BLACK;
+    }
+  }
+  //left
+  if(lr > R_BORDER){
+    if(lg > G_BORDER){
+      Line_Sensor[3] = WHITE;
+    }else{
+      Line_Sensor[3] = RED;
+    }
+  }else{
+    if(lg > G_BORDER){
+      Line_Sensor[3] = GREEN;
+    }else{
+      Line_Sensor[3] = BLACK;
+    }
+  }
+  //TPR-r
+  if(tpr_r > TPR_BORDER){
+    Line_Sensor[0] = BLACK;
+  }else{
+    Line_Sensor[0] = WHITE;
+  }
+  //TPR-m
+  if(tpr_m > TPR_BORDER){
+    Line_Sensor[2] = BLACK;
+  }else{
+    Line_Sensor[2] = WHITE;
+  }
+  //TPR-l
+  if(tpr_l > TPR_BORDER){
+    Line_Sensor[4] = BLACK;
+  }else{
+    Line_Sensor[4] = WHITE;
+  }
+  //silver
+  if(silver < SILVER_BORDER){
+    isSilver = true;
+  }
 }
 
 void color_read(){
@@ -177,6 +244,13 @@ void bmx_init(){
   Wire.endTransmission();
 }
 
+void bmx_fixer(){
+  xMag += bmx_x_os;
+  yMag += bmx_y_os;
+  xMag = RC * before_x + (1 - RC) * xMag;
+  yMag = RC * before_y + (1 - RC) * yMag;
+}
+
 void bmx_read(){
   change_i2c_port(2);
   unsigned int data[8];
@@ -195,11 +269,7 @@ void bmx_read(){
   if(yMag > 4095)yMag -= 8192;
   zMag = ((data[5] << 7) | (data[4] >> 1));
   if(zMag > 16383)zMag -= 32768;
-  xMag += bmx_x_os;
-  yMag += bmx_y_os;
-}
-
-void bmx_fixer(){
+  bmx_fixer();
 }
 
 void test_sensor_setup(){
@@ -217,44 +287,6 @@ void test_sensor_setup(){
   Serial.println("uwu");
 }
 
-void test_sensor_loop(){/*
-  int low,high,r,g,b,ir;
-  delay(10);
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(SENSOR_REGISTER);
-  Wire.endTransmission();
-  Wire.requestFrom(S11059_ADDR,8);
-  if(Wire.available()){
-    high = Wire.read();
-    low = Wire.read();
-    r = high << 8 | low;
-    high = Wire.read();
-    low = Wire.read();
-    g = high << 8 | low;
-    high = Wire.read();
-    low = Wire.read();
-    b = high << 8 | low;
-    high = Wire.read();
-    low = Wire.read();
-    ir = high << 8 | low;
-  }
-  Wire.endTransmission();
-  Serial.print(r);
-  Serial.print(",");
-  Serial.print(g);
-  Serial.print(",");
-  Serial.print(b);
-  Serial.print(",");
-  Serial.print(ir);
-  Serial.print('\n');*/
-  bmx_read();
-  Serial.print(xMag);
-  Serial.print(",");
-  Serial.print(yMag);
-  Serial.print(",");
-  Serial.println(atan2(yMag,xMag) * 180 / PI);
-}
-
 void servo_write(Bucket mode){
   change_i2c_port(3);
   if(mode == RAISE){
@@ -269,6 +301,24 @@ void servo_write(Bucket mode){
     servo.setPWM(2,0,SERVO_MIN);
   }
   delay(500);
+}
+
+void test_sensor_loop(){
+  servo_write(RAISE);
+  servo_write(DOWN);
+  /*color_read();
+  judge_color();
+  for(int i = 0;i < 5;i++){
+    Serial.print(Line_Sensor[i]);
+    Serial.print(",");
+  }
+  Serial.println("");*/
+  //bmx_read();
+  //Serial.println(yMag);
+  //Serial.print(",");
+  //Serial.print(yMag);
+  //Serial.print(",");
+  //Serial.println(atan2(yMag,xMag) * 180 / PI);
 }
 
 void setup() {
@@ -328,66 +378,6 @@ void setup() {
   //サーボ初期化
   servo.setPWMFreq(50);
   servo_write(RAISE);
-}
-
-void judge_color(){
-  #define R_BORDER 0
-  #define G_BORDER 0
-  #define B_BORDER 0
-  #define IR_BORDER 0
-  #define TPR_BORDER 0
-  #define SILVER_BORDER 0
-  //I2C Color Sensor
-  //right
-  if(rr > R_BORDER){
-    if(rg > G_BORDER){
-      Line_Sensor[1] = WHITE;
-    }else{
-      Line_Sensor[1] = RED;
-    }
-  }else{
-    if(rg > G_BORDER){
-      Line_Sensor[1] = GREEN;
-    }else{
-      Line_Sensor[1] = BLACK;
-    }
-  }
-  //left
-  if(lr > R_BORDER){
-    if(lg > G_BORDER){
-      Line_Sensor[3] = WHITE;
-    }else{
-      Line_Sensor[3] = RED;
-    }
-  }else{
-    if(lg > G_BORDER){
-      Line_Sensor[3] = GREEN;
-    }else{
-      Line_Sensor[3] = BLACK;
-    }
-  }
-  //TPR-r
-  if(tpr_r > TPR_BORDER){
-    Line_Sensor[0] = BLACK;
-  }else{
-    Line_Sensor[0] = WHITE;
-  }
-  //TPR-m
-  if(tpr_r > TPR_BORDER){
-    Line_Sensor[2] = BLACK;
-  }else{
-    Line_Sensor[2] = WHITE;
-  }
-  //TPR-l
-  if(tpr_r > TPR_BORDER){
-    Line_Sensor[4] = BLACK;
-  }else{
-    Line_Sensor[4] = WHITE;
-  }
-  //silver
-  if(silver < SILVER_BORDER){
-    isSilver = true;
-  }
 }
 
 void motor_write(int right,int left){
