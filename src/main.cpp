@@ -93,58 +93,83 @@ void change_i2c_port(int byte){
 }
 
 void judge_color(){
-  #define R_BORDER 200
-  #define G_BORDER 200
-  #define B_BORDER 200
-  #define IR_BORDER 200
-  #define TPR_BORDER 400
+  #define RR_BORDER 400
+  #define RG_BORDER 500
+  #define RB_BORDER 200
+  #define RIR_BORDER 200
+  #define LR_BORDER 500
+  #define LG_BORDER 500
+  #define LB_BORDER 200
+  #define LIR_BORDER 200
+  #define R_TPR_BORDER 200
+  #define M_TPR_BORDER 28
+  #define L_TPR_BORDER 400
+  #define B_TPR_BORDER 400
   #define SILVER_BORDER 300
-  
-  Serial.print(silver);
-  Serial.print(",");
+  #define R_GpR_MIN 1.2
+  #define R_GpR_MAX 1.7
+  #define L_GpR_MIN 1.2
+  #define L_GpR_MAX 1.7
+
   //I2C Color Sensor
   //right
-  if(rr > R_BORDER){
-    if(rg > G_BORDER){
+  if(rr > RR_BORDER){
+    if(rg > RG_BORDER){
       Line_Sensor[1] = WHITE;
     }else{
-      Line_Sensor[1] = RED;
+      if((float)rg/rr > R_GpR_MIN && (float)rg/rr < R_GpR_MAX){
+        Line_Sensor[1] = WHITE;
+      }else{
+        Line_Sensor[1] = RED;
+      }
     }
   }else{
-    if(rg > G_BORDER){
-      Line_Sensor[1] = GREEN;
+    if(rg > RG_BORDER){
+      if((float)rg/rr > R_GpR_MIN && (float)rg/rr < R_GpR_MAX){
+        Line_Sensor[1] = BLACK;
+      }else{
+        Line_Sensor[1] = GREEN;
+      }
     }else{
       Line_Sensor[1] = BLACK;
     }
   }
   //left
-  if(lr > R_BORDER){
-    if(lg > G_BORDER){
+  if(lr > LR_BORDER){
+    if(lg > LG_BORDER){
       Line_Sensor[3] = WHITE;
     }else{
-      Line_Sensor[3] = RED;
+      if((float)lg/lr > L_GpR_MIN && (float)lg/lr < L_GpR_MAX){
+        Line_Sensor[3] = WHITE;
+      }else{
+        Line_Sensor[3] = RED;
+      }
     }
   }else{
-    if(lg > G_BORDER){
-      Line_Sensor[3] = GREEN;
+    if(lg > LG_BORDER){
+      if((float)lg/lr > L_GpR_MIN && (float)lg/lr < L_GpR_MAX){
+        Line_Sensor[3] = BLACK;
+      }else{
+        Line_Sensor[3] = GREEN;
+      }
     }else{
       Line_Sensor[3] = BLACK;
     }
   }
   //TPR-r
-  if(tpr_r > TPR_BORDER){
+  if(tpr_r > R_TPR_BORDER){
     Line_Sensor[0] = BLACK;
   }else{
     Line_Sensor[0] = WHITE;
   }
   //TPR-m
-  if(tpr_m > TPR_BORDER){
+  if(tpr_m > M_TPR_BORDER){
     Line_Sensor[2] = BLACK;
   }else{
     Line_Sensor[2] = WHITE;
   }
   //TPR-l
-  if(tpr_l > TPR_BORDER){
+  if(tpr_l > L_TPR_BORDER){
     Line_Sensor[4] = BLACK;
   }else{
     Line_Sensor[4] = WHITE;
@@ -157,15 +182,15 @@ void judge_color(){
 
 void color_read(){
   //カラーセンサー読み取り
-  change_i2c_port(0);
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(SENSOR_REGISTER);
-  Wire.endTransmission();
   change_i2c_port(1);
   Wire.beginTransmission(S11059_ADDR);
   Wire.write(SENSOR_REGISTER);
   Wire.endTransmission();
   change_i2c_port(0);
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(SENSOR_REGISTER);
+  Wire.endTransmission();
+  change_i2c_port(1);
   Wire.requestFrom(S11059_ADDR,8);
   if(Wire.available()){
     //right-red
@@ -186,7 +211,7 @@ void color_read(){
     rir = higher << 8 | lower;
   }
   Wire.endTransmission();
-  change_i2c_port(1);
+  change_i2c_port(0);
   Wire.requestFrom(S11059_ADDR,8);
   if(Wire.available()){
     //left-red
@@ -304,15 +329,16 @@ void servo_write(Bucket mode){
 }
 
 void test_sensor_loop(){
-  servo_write(RAISE);
-  servo_write(DOWN);
-  /*color_read();
+  //servo_write(RAISE);
+  //servo_write(DOWN);
+  color_read();
   judge_color();
+  //Serial.println((float)rg/rr);/*
   for(int i = 0;i < 5;i++){
     Serial.print(Line_Sensor[i]);
     Serial.print(",");
   }
-  Serial.println("");*/
+  Serial.println("");
   //bmx_read();
   //Serial.println(yMag);
   //Serial.print(",");
@@ -590,7 +616,7 @@ void looking_corner(){
     while(digitalRead(P_T_B) == HIGH);
     delay(500);
     motor_write(0,0);
-    if(analogRead(P_TPR_B) > TPR_BORDER){
+    if(analogRead(P_TPR_B) > B_TPR_BORDER){
       //黒の時
       servo_write(RELEASE);
       delay(1500);
