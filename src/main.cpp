@@ -9,9 +9,12 @@
 //D26~D29:Touch Sensor
 //motor_write()の最大値は256
 //タッチセンサーの値は反転するので注意
-//
-//
-//
+//調整必要項目
+//・BMX055の中心点・拡大率など
+//・ラインセンサー閾値
+//・三角コーナーでどっちに回転するか
+//・トレース制御部の定数項
+//・救助コーナー内での転換方向
 ///////////////////////////////////////////////*/
 #include <Arduino.h>
 #include <Wire.h>
@@ -435,34 +438,49 @@ void motor_write(int right,int left){
   }
 }
 
+int tan2angle(int x,int y){
+  return atan2(y,x) * 180 / PI;
+}
+
 void rotate(int angle){
+  #define ALLOW_DIF 10
   motor_write(0,0);
   delay(250);
   bmx_read();
-  int n_angle = atan2(yMag,xMag) * 180 / PI;
+  int n_angle = tan2angle(xMag,yMag);
   int target = n_angle + angle;
   if(angle > 0){
     //時計回り
     motor_write(-64,64);
-    while(abs(target - n_angle) > abs(target) * 0.1){
-      bmx_read();
-      n_angle = atan2(yMag,xMag) * 180 / PI;
+    if(target > 180){
+      target -= 360;
+      while(abs(target - n_angle) > ALLOW_DIF){
+        bmx_read();
+        n_angle = tan2angle(xMag,yMag);
+      }
+    }else{
+      while(abs(target - n_angle) > ALLOW_DIF){
+        bmx_read();
+        n_angle = tan2angle(xMag,yMag);
+      }
     }
   }else if(angle < 0){
     //反時計回り
     motor_write(64,-64);
-    while(abs(target - n_angle) > abs(target) * 0.1){
-      bmx_read();
-      n_angle = atan2(yMag,xMag) * 180 / PI;
+    if(target < 180){
+      target += 360;
+      while(abs(target - n_angle) > ALLOW_DIF){
+        bmx_read();
+        n_angle = tan2angle(xMag,yMag);
+      }
+    }else{
+      while(abs(target - n_angle) > ALLOW_DIF){
+        bmx_read();
+        n_angle = tan2angle(xMag,yMag);
+      }
     }
   }else return;
   motor_write(0,0);
-}
-
-void rotate_target(int target){
-  bmx_read();
-  int ang = atan2(yMag,xMag) * 180 / PI;
-  rotate(target - ang);
 }
 
 void go_straight(int val){
@@ -472,38 +490,39 @@ void go_straight(int val){
 
 void detect_green(){
   bool isRightGreen,isLeftGreen;
-      Line_Sensor[1] == GREEN ? isRightGreen = true : isRightGreen = false;
-      Line_Sensor[3] == GREEN ? isLeftGreen = true : isLeftGreen = false;
-      motor_write(0,0);
-      delay(500);
-      motor_write(64,64);
-      while(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
-        color_read();
-        judge_color();
-      }
-      motor_write(0,0);
-      color_read();
-      judge_color();
-      if(Line_Sensor[2] == WHITE){
-        Serial.println("What's wrong??? There is no detecton on middle sensor.");
-      }
-      if(Line_Sensor[0] == WHITE && Line_Sensor[4] == WHITE){
-        //フェイク交差点だったとき
-        Serial.println("An Fatal Error Has Occured.Program Will Exit.Stop Code:Black Line Not Found");
-        return;
-      }else{
-        //THE☆交差点
-        if(isRightGreen && isLeftGreen){
-          //180ターン
-          rotate(180);
-        }else if(isRightGreen && !isLeftGreen){
-          //右に90ターン
-          rotate(90);
-        }else if(!isRightGreen && isLeftGreen){
-          //左に90ターン
-          rotate(-90);
-        }
-      }
+  delay(500);
+  Line_Sensor[1] == GREEN ? isRightGreen = true : isRightGreen = false;
+  Line_Sensor[3] == GREEN ? isLeftGreen = true : isLeftGreen = false;
+  motor_write(0,0);
+  delay(500);
+  motor_write(64,64);
+  while(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
+    color_read();
+    judge_color();
+  }
+  motor_write(0,0);
+  color_read();
+  judge_color();
+  if(Line_Sensor[2] == WHITE){
+    Serial.println("What's wrong??? There is no detecton on middle sensor.");
+  }
+  if(Line_Sensor[0] == WHITE && Line_Sensor[4] == WHITE){
+    //フェイク交差点だったとき
+    Serial.println("An Fatal Error Has Occured.Program Will Exit.Stop Code:Black Line Not Found");
+    return;
+  }else{
+    //THE☆交差点
+    if(isRightGreen && isLeftGreen){
+      //180ターン
+      rotate(180);
+    }else if(isRightGreen && !isLeftGreen){
+      //右に90ターン
+      rotate(90);
+    }else if(!isRightGreen && isLeftGreen){
+      //左に90ターン
+      rotate(-90);
+    }
+  }
 }
 
 bool touch_sensor(){
@@ -590,7 +609,6 @@ void looking_corner(){
     if(Line_Sensor[1] != WHITE || Line_Sensor[3] != WHITE || isSilver){
       motor_write(0,0);
       delay(500);
-      rotate(90);
       return;
     }
   }
@@ -599,19 +617,10 @@ void looking_corner(){
   if(digitalRead(P_T_R) == LOW && digitalRead(P_T_L) == LOW){
     //違うらしいよ
     //右に回転
-    rotate(90);
     return;
-  }
-  else{
+  }else{
     bmx_read();
-    int this_ang = atan2(yMag,xMag) * 180 / PI; 
-    if(digitalRead(P_T_R == HIGH)){
-      //時計回りに135度回転
-      rotate(135);
-    }else{
-      //反時計回りに135度回転
-      rotate(-135);
-    }
+    rotate(135);
     motor_write(-64,-64);
     while(digitalRead(P_T_B) == HIGH);
     delay(500);
@@ -635,10 +644,7 @@ void looking_corner(){
         servo_write(RAISE);
         delay(250);
       }
-      //右を向く(絶対値)
-      int tar = this_ang + 90;
-      if(tar > 180)tar -= 360;
-      rotate_target(tar);
+      rotate(-45);
       color_read();
       judge_color();
       motor_write(192,192);
@@ -673,6 +679,9 @@ void looking_corner(){
           motor_write(192,192);
         }
       }
+    }else{
+      //三角コーナーじゃなくて壁の時の処理
+      //考えてないよ☆（ゝω・）vｷｬﾋﾟ
     }
   }
 }
