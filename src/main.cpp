@@ -1,12 +1,13 @@
 /*///////////////////////////////////////////////
 //ピン配置
 //SDA&SCL:I2C
-//A6~A10:tpr-r,tpr-m,tpr-l,silver,tpr-back
-//D2,D3:Motor Driver(PWM)
-//D4~D7:Motor Driver(Digital)
-//D22,D24:Sonic Sensor(Trig)
-//D23,D25:Sonic Sensor(Echo)
-//D26~D29:Touch Sensor
+//A12~A15:tpr-r,tpr-m,tpr-l,silver
+//A11:tpr-back
+//D2,D7:Motor Driver(PWM)
+//D3~D6:Motor Driver(Digital)
+//D23,D25:Sonic Sensor(Trig)
+//D24,D26:Sonic Sensor(Echo)
+//D44,D46,D48,D50,D52:Touch Sensor
 //motor_write()の最大値は256
 //タッチセンサーの値は反転するので注意
 //調整必要項目
@@ -25,21 +26,21 @@
 #define P_TPR_M A13
 #define P_TPR_L A14
 #define P_SILVER A15
-#define P_TPR_B A10
-#define P_M_APWM 2
-#define P_M_A1 4
-#define P_M_A2 5
-#define P_M_BPWM 3
+#define P_TPR_B A11
+#define P_M_APWM 8
+#define P_M_A1 3
+#define P_M_A2 4
+#define P_M_BPWM 7
 #define P_M_B1 6
-#define P_M_B2 7
-#define P_S_RT 22
+#define P_M_B2 5
+#define P_S_RT 23
 #define P_S_LT 24
-#define P_S_RE 23
-#define P_S_LE 25
-#define P_T_R 26
-#define P_T_M 27
-#define P_T_L 28
-#define P_T_B 29
+#define P_S_RE 25
+#define P_S_LE 26
+#define P_T_R 52
+#define P_T_M 50
+#define P_T_L 48
+#define P_T_B 46
 
 //アドレス指定
 #define S11059_ADDR 0x2A
@@ -104,10 +105,10 @@ void judge_color(){
   #define LG_BORDER 500
   #define LB_BORDER 200
   #define LIR_BORDER 200
-  #define R_TPR_BORDER 200
+  #define R_TPR_BORDER 100
   #define M_TPR_BORDER 28
-  #define L_TPR_BORDER 400
-  #define B_TPR_BORDER 400
+  #define L_TPR_BORDER 100
+  #define B_TPR_BORDER 100
   #define SILVER_BORDER 300
   #define R_GpR_MIN 1.2
   #define R_GpR_MAX 1.7
@@ -336,12 +337,12 @@ void test_sensor_loop(){
   //servo_write(DOWN);
   color_read();
   judge_color();
-  //Serial.println((float)rg/rr);/*
+  //Serial.println(rr);/*
   for(int i = 0;i < 5;i++){
     Serial.print(Line_Sensor[i]);
     Serial.print(",");
   }
-  Serial.println("");
+  Serial.println("");//*/
   //bmx_read();
   //Serial.println(yMag);
   //Serial.print(",");
