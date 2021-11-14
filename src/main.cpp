@@ -89,6 +89,9 @@ Adafruit_PWMServoDriver servo = Adafruit_PWMServoDriver(0x41);
 //silver
 bool isSilver = false;
 
+//PID用の直近の値保持
+int Previous_Line_Value[5];
+
 //TCA9548A
 void change_i2c_port(int byte){
   Wire.beginTransmission(0x70);
@@ -97,12 +100,12 @@ void change_i2c_port(int byte){
 }
 
 void judge_color(){
-  #define RR_BORDER 400
-  #define RG_BORDER 500
+  #define RR_BORDER 275
+  #define RG_BORDER 400
   #define RB_BORDER 200
   #define RIR_BORDER 200
   #define LR_BORDER 500
-  #define LG_BORDER 500
+  #define LG_BORDER 450
   #define LB_BORDER 200
   #define LIR_BORDER 200
   #define R_TPR_BORDER 100
@@ -337,7 +340,7 @@ void test_sensor_loop(){
   //servo_write(DOWN);
   color_read();
   judge_color();
-  //Serial.println(rr);/*
+  Serial.println(rir);/*
   for(int i = 0;i < 5;i++){
     Serial.print(Line_Sensor[i]);
     Serial.print(",");
@@ -712,6 +715,17 @@ void p_trace(){
   right -= Line_Value[4] / OUTLINE;
   left += Line_Value[4] / OUTLINE;
   motor_write(right,left);
+}
+
+void p_trace_v2(){
+  //PIDみたいなことをやってみる
+  //P:ライン位置により定数変更
+  //I:時間積分、ライン位置により定数変更
+  //D:時間微分
+  int f_tpr_r,f_tpr_l;
+  f_tpr_r = 1024 - tpr_r;
+  f_tpr_l = 1024 - tpr_l;
+  //めんどくせー！
 }
 
 void loop() {
