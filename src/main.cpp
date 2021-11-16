@@ -75,10 +75,11 @@ int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r,xMa
 
 //bmxのオフセット
 const int bmx_x_os = 20;
-const int bmx_y_os = 15;
+const int bmx_y_os = 25;
 
 //右から左へ
 Color Line_Sensor[5];
+Color Previous_Line_Sensor[5];
 
 //走行モード切替
 State state = TRACE;
@@ -89,8 +90,12 @@ Adafruit_PWMServoDriver servo = Adafruit_PWMServoDriver(0x41);
 //silver
 bool isSilver = false;
 
-//PID用の直近の値保持
-int Previous_Line_Value[5];
+//Timer
+long timer;
+
+//前回の値保持(P操作量)
+int volume;
+int previous_volume;
 
 //TCA9548A
 void change_i2c_port(int byte){
@@ -101,11 +106,11 @@ void change_i2c_port(int byte){
 
 void judge_color(){
   #define RR_BORDER 275
-  #define RG_BORDER 400
+  #define RG_BORDER 420
   #define RB_BORDER 200
   #define RIR_BORDER 200
   #define LR_BORDER 500
-  #define LG_BORDER 450
+  #define LG_BORDER 470
   #define LB_BORDER 200
   #define LIR_BORDER 200
   #define R_TPR_BORDER 100
@@ -118,6 +123,8 @@ void judge_color(){
   #define L_GpR_MIN 1.2
   #define L_GpR_MAX 1.7
 
+  //前回の値を移動
+  for(int i = 0;i < 5;i++) Previous_Line_Sensor[i] = Line_Sensor[i];
   //I2C Color Sensor
   //right
   if(rr > RR_BORDER){
@@ -339,19 +346,19 @@ void test_sensor_loop(){
   //servo_write(RAISE);
   //servo_write(DOWN);
   color_read();
-  judge_color();
-  Serial.println(rir);/*
+  judge_color();/*
+  Serial.println(tpr_r);/*
   for(int i = 0;i < 5;i++){
     Serial.print(Line_Sensor[i]);
     Serial.print(",");
   }
   Serial.println("");//*/
-  //bmx_read();
-  //Serial.println(yMag);
-  //Serial.print(",");
-  //Serial.print(yMag);
-  //Serial.print(",");
-  //Serial.println(atan2(yMag,xMag) * 180 / PI);
+  bmx_read();
+  Serial.print(xMag);
+  Serial.print(",");
+  Serial.print(yMag);
+  Serial.print(",");
+  Serial.println(atan2(yMag,xMag) * 180 / PI);//*/
 }
 
 void setup() {
@@ -717,15 +724,44 @@ void p_trace(){
   motor_write(right,left);
 }
 
+bool check_color_match(){
+  if(Previous_Line_Sensor[0] == Line_Sensor[0])return true;
+  if(Previous_Line_Sensor[1] == Line_Sensor[1])return true;
+  if(Previous_Line_Sensor[2] == Line_Sensor[2])return true;
+  if(Previous_Line_Sensor[3] == Line_Sensor[3])return true;
+  if(Previous_Line_Sensor[4] == Line_Sensor[4])return true;
+  return false;
+}
+
 void p_trace_v2(){
   //PIDみたいなことをやってみる
   //P:ライン位置により定数変更
   //I:時間積分、ライン位置により定数変更
   //D:時間微分
+  #define P_V2_OUTSIDE 50
+  #define P_V2_INSIDE 10
+  #define INTEGRAL 1.2
+  #define DELTA 2.0
+  previous_volume = volume;
   int f_tpr_r,f_tpr_l;
   f_tpr_r = 1024 - tpr_r;
   f_tpr_l = 1024 - tpr_l;
   //めんどくせー！
+  //右が正の操作量
+  volume = P_V2_INSIDE * ((rr + rg + rb) / 3 - (lr + lg + lb) / 3) + P_V2_OUTSIDE * (f_tpr_r - f_tpr_l);
+  Line_Sensor[2] == WHITE ? volume = volume : volume = volume * 2;
+  if(volume > 192) volume = 192;
+  else if(volume < -192) volume = -192;
+  //I
+  long now_time = millis();
+  if(check_color_match()) timer = now_time;
+  int op_integral = INTEGRAL * volume * (millis() - timer) / 1000;
+  //D
+  int op_delta = DELTA * (previous_volume - volume);
+  int operation = (volume + op_integral + op_delta) / 3;
+  if(operation > 192) operation = 192;
+  else if(operation < -192) operation = -192;
+  motor_write(128 + operation /2,128 - operation / 2);
 }
 
 void loop() {
