@@ -27,12 +27,12 @@
 #define P_TPR_L A14
 #define P_SILVER A15
 #define P_TPR_B A11
-#define P_M_APWM 8
-#define P_M_A1 3
-#define P_M_A2 4
-#define P_M_BPWM 7
-#define P_M_B1 6
-#define P_M_B2 5
+#define P_M_APWM 4
+#define P_M_A1 2
+#define P_M_A2 3
+#define P_M_BPWM 5
+#define P_M_B1 7
+#define P_M_B2 6
 #define P_S_RT 23
 #define P_S_LT 24
 #define P_S_RE 25
@@ -41,6 +41,7 @@
 #define P_T_M 50
 #define P_T_L 48
 #define P_T_B 46
+#define BZ 9
 
 //アドレス指定
 #define S11059_ADDR 0x2A
@@ -74,8 +75,8 @@ enum State{TRACE,RESCUE,CORNER};
 int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r,xMag,yMag,zMag,count = 0;
 
 //bmxのオフセット
-const int bmx_x_os = 20;
-const int bmx_y_os = 25;
+const int bmx_x_os = -55;
+const int bmx_y_os = 101;
 
 //右から左へ
 Color Line_Sensor[5];
@@ -104,24 +105,30 @@ void change_i2c_port(int byte){
   Wire.endTransmission();
 }
 
+void buzzer(int frq){
+  tone(BZ,frq);
+  delay(1000);
+  noTone(BZ);
+}
+
 void judge_color(){
-  #define RR_BORDER 275
-  #define RG_BORDER 420
-  #define RB_BORDER 200
+  #define RR_BORDER 288
+  #define RG_BORDER 260
+  #define RB_BORDER 260
   #define RIR_BORDER 200
-  #define LR_BORDER 500
-  #define LG_BORDER 470
+  #define LR_BORDER 268
+  #define LG_BORDER 350
   #define LB_BORDER 200
   #define LIR_BORDER 200
-  #define R_TPR_BORDER 100
+  #define R_TPR_BORDER 350
   #define M_TPR_BORDER 28
-  #define L_TPR_BORDER 100
+  #define L_TPR_BORDER 350
   #define B_TPR_BORDER 100
-  #define SILVER_BORDER 300
-  #define R_GpR_MIN 1.2
-  #define R_GpR_MAX 1.7
-  #define L_GpR_MIN 1.2
-  #define L_GpR_MAX 1.7
+  #define SILVER_BORDER 500
+  #define R_GpR_MIN 1.0
+  #define R_GpR_MAX 1.6
+  #define L_GpR_MIN 1.0
+  #define L_GpR_MAX 1.6
 
   //前回の値を移動
   for(int i = 0;i < 5;i++) Previous_Line_Sensor[i] = Line_Sensor[i];
@@ -135,6 +142,7 @@ void judge_color(){
         Line_Sensor[1] = WHITE;
       }else{
         Line_Sensor[1] = RED;
+
       }
     }
   }else{
@@ -286,8 +294,8 @@ void bmx_init(){
 void bmx_fixer(){
   xMag += bmx_x_os;
   yMag += bmx_y_os;
-  xMag = RC * before_x + (1 - RC) * xMag;
-  yMag = RC * before_y + (1 - RC) * yMag;
+  //xMag = RC * before_x + (1 - RC) * xMag;
+  //yMag = RC * before_y + (1 - RC) * yMag;
 }
 
 void bmx_read(){
@@ -342,28 +350,7 @@ void servo_write(Bucket mode){
   delay(500);
 }
 
-void test_sensor_loop(){
-  //servo_write(RAISE);
-  //servo_write(DOWN);
-  color_read();
-  judge_color();/*
-  Serial.println(tpr_r);/*
-  for(int i = 0;i < 5;i++){
-    Serial.print(Line_Sensor[i]);
-    Serial.print(",");
-  }
-  Serial.println("");//*/
-  bmx_read();
-  Serial.print(xMag);
-  Serial.print(",");
-  Serial.print(yMag);
-  Serial.print(",");
-  Serial.println(atan2(yMag,xMag) * 180 / PI);//*/
-}
-
-void setup() {
-  test_sensor_setup();
-  return;
+void setup(){
   #ifdef COLOR_DEBUG
   //ほげー
   test_sensor_setup();
@@ -389,6 +376,7 @@ void setup() {
   pinMode(P_T_M,INPUT);
   pinMode(P_T_L,INPUT);
   pinMode(P_T_B,INPUT);
+  pinMode(BZ,OUTPUT);
   // シリアル開始
   Serial.begin(9600);
   //I2Cスタート
@@ -416,8 +404,19 @@ void setup() {
   //地磁気センサーリセット
   bmx_init();
   //サーボ初期化
-  servo.setPWMFreq(50);
-  servo_write(RAISE);
+  //servo.setPWMFreq(50);
+  //servo_write(RAISE);
+}
+
+void check_voltage(){
+  if(analogRead(A0) < 655){
+    while(true){
+      tone(BZ,440);
+      delay(1000);
+      noTone(BZ);
+      delay(1000);
+    }
+  }
 }
 
 void motor_write(int right,int left){
@@ -428,38 +427,84 @@ void motor_write(int right,int left){
   }else if(right > 0){
     digitalWrite(P_M_A1,HIGH);
     digitalWrite(P_M_A2,LOW);
-    analogWrite(P_M_APWM,right);
+    analogWrite(P_M_APWM,abs(right));
   }else{
     digitalWrite(P_M_A1,LOW);
     digitalWrite(P_M_A2,HIGH);
-    analogWrite(P_M_APWM,right);
+    analogWrite(P_M_APWM,abs(right));
   }
   //left
   if(left == 0){
     digitalWrite(P_M_B1,LOW);
     digitalWrite(P_M_B2,LOW);
-  }else if(right > 0){
+  }else if(left > 0){
     digitalWrite(P_M_B1,HIGH);
     digitalWrite(P_M_B2,LOW);
-    analogWrite(P_M_BPWM,left);
+    analogWrite(P_M_BPWM,abs(left));
   }else{
     digitalWrite(P_M_B1,LOW);
     digitalWrite(P_M_B2,HIGH);
-    analogWrite(P_M_BPWM,left);
+    analogWrite(P_M_BPWM,abs(left));
   }
+}
+
+void p_trace(){
+  #define GAIN 0.1
+  const int r_target = 425;
+  const int l_target = 480;
+  int r_v = (rr + rg + rb) / 3 - r_target;
+  int l_v = (lr + lg + lb) / 3 - l_target;
+  int val = r_v - l_v;
+  val *= 0.4;
+  int rm = 30 + val;
+  int lm = 30 - val;
+  if(rm > 80)rm = 80;
+  if(lm > 80)lm = 80;
+  motor_write(rm,lm);
+  //Serial.println(val);
+  /*Serial.print(r_v);
+  Serial.print(",");
+  Serial.println(l_v);*/
 }
 
 int tan2angle(int x,int y){
   return atan2(y,x) * 180 / PI;
 }
 
+void check_bmx(){
+  int xmax,xmin,ymax,ymin;
+  bmx_read();
+  xmax = xMag;
+  xmin = xMag;
+  ymax = yMag;
+  ymin = yMag;
+  while(true){
+    bmx_read();
+    if(xMag > xmax)xmax = xMag;
+    if(xMag < xmin)xmin = xMag;
+    if(yMag > ymax)ymax = yMag;
+    if(yMag < ymin)ymin = yMag;
+    Serial.print(xmin);
+    Serial.print(",");
+    Serial.print(xmax);
+    Serial.print(",");
+    Serial.print(ymin);
+    Serial.print(",");
+    Serial.println(ymax);
+  }
+}
+
 void rotate(int angle){
-  #define ALLOW_DIF 10
+  #define ALLOW_DIF 20
+  Serial.println("begin to rotate");
   motor_write(0,0);
-  delay(250);
+  delay(500);
   bmx_read();
   int n_angle = tan2angle(xMag,yMag);
   int target = n_angle + angle;
+  Serial.print(n_angle);
+  Serial.print(",");
+  Serial.println(target);
   if(angle > 0){
     //時計回り
     motor_write(-64,64);
@@ -473,12 +518,13 @@ void rotate(int angle){
       while(abs(target - n_angle) > ALLOW_DIF){
         bmx_read();
         n_angle = tan2angle(xMag,yMag);
+        Serial.println(n_angle);
       }
     }
   }else if(angle < 0){
     //反時計回り
     motor_write(64,-64);
-    if(target < 180){
+    if(target < -180){
       target += 360;
       while(abs(target - n_angle) > ALLOW_DIF){
         bmx_read();
@@ -492,6 +538,7 @@ void rotate(int angle){
     }
   }else return;
   motor_write(0,0);
+  Serial.println("I've done it!");
 }
 
 void go_straight(int val){
@@ -500,37 +547,47 @@ void go_straight(int val){
 }
 
 void detect_green(){
-  bool isRightGreen,isLeftGreen;
-  delay(500);
-  Line_Sensor[1] == GREEN ? isRightGreen = true : isRightGreen = false;
-  Line_Sensor[3] == GREEN ? isLeftGreen = true : isLeftGreen = false;
+  bool isRightGreen = false;
+  bool isLeftGreen = false;
   motor_write(0,0);
-  delay(500);
-  motor_write(64,64);
+  buzzer(500);
   while(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
     color_read();
     judge_color();
+    p_trace();
+    if(Line_Sensor[1] == GREEN)isRightGreen = true;
+    if(Line_Sensor[3] == GREEN)isLeftGreen = true;
+  Serial.print(isRightGreen);
+  Serial.print(",");
+  Serial.println(isLeftGreen);
   }
   motor_write(0,0);
   color_read();
   judge_color();
-  if(Line_Sensor[2] == WHITE){
+  /*if(Line_Sensor[2] == WHITE){
     Serial.println("What's wrong??? There is no detecton on middle sensor.");
-  }
+  }*/
   if(Line_Sensor[0] == WHITE && Line_Sensor[4] == WHITE){
     //フェイク交差点だったとき
     Serial.println("An Fatal Error Has Occured.Program Will Exit.Stop Code:Black Line Not Found");
+    buzzer(1000);
     return;
   }else{
     //THE☆交差点
     if(isRightGreen && isLeftGreen){
       //180ターン
+      Serial.println("turning 180");
+      buzzer(700);
       rotate(180);
     }else if(isRightGreen && !isLeftGreen){
       //右に90ターン
+      Serial.println("turning 90");
+      buzzer(800);
       rotate(90);
     }else if(!isRightGreen && isLeftGreen){
       //左に90ターン
+      Serial.println("turning -90");
+      buzzer(600);
       rotate(-90);
     }
   }
@@ -608,6 +665,14 @@ void avoid_object(){
   motor_write(0,0);
 }
 
+void check_color(){
+  for(int i = 0;i < 5;i++){
+    Serial.print(Line_Sensor[i]);
+    Serial.print(",");
+  }
+  Serial.println("");
+}
+
 void looking_corner(){
   //三角コーナーからの逃亡コード
   servo_write(DOWN);
@@ -677,7 +742,7 @@ void looking_corner(){
           }else if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
             //脱出完了
             delay(100);
-            state == TRACE;
+            state = TRACE;
             return;
           }
         }
@@ -697,31 +762,17 @@ void looking_corner(){
   }
 }
 
-void p_trace(){
-  //センサーの位置で係数を変える
-  int Line_Value[5];
-  int right,left = 128;
-  //外側は変化量128にしたい
-  #define OUTLINE 16
-  //内側は変化量64にしたい
-  #define INLINE 28
-  //黒のほうが高い
-  //tpr max:1024
-  Line_Value[0] = 1024 - tpr_r;
-  Line_Value[2] = 1024 - tpr_m;
-  Line_Value[4] = 1024 - tpr_l;
-  //color max:about 864
-  Line_Value[1] = (rr + rg + rb) / 3;
-  Line_Value[3] = (lr + lg + lb) / 3;
-  right += Line_Value[0] / OUTLINE;
-  left -= Line_Value[0] / OUTLINE;
-  right += Line_Value[1] / INLINE;
-  left -= Line_Value[1] / INLINE;
-  right -= Line_Value[3] / INLINE;
-  left += Line_Value[3] / INLINE;
-  right -= Line_Value[4] / OUTLINE;
-  left += Line_Value[4] / OUTLINE;
-  motor_write(right,left);
+void p_trace_v3(){
+  #define INSIDE 1
+  #define OUTSIDE 20
+  int r_value =INSIDE * (rr + rg + rb) / 40;
+  int l_value =INSIDE * (lr + lg + lb) / 40;
+  int dif = r_value - l_value;
+  Serial.println(dif);
+  int rm = 48 * (50 - abs(dif)) / 25 + dif;
+  int lm = 48 * (50 - abs(dif)) / 25 - dif;
+  if(rm > 112) rm = 112;
+  motor_write(rm,lm);
 }
 
 bool check_color_match(){
@@ -764,9 +815,51 @@ void p_trace_v2(){
   motor_write(128 + operation /2,128 - operation / 2);
 }
 
+void test_sensor_loop(){
+  /*rotate(90);
+  delay(2000);
+  rotate(-90);
+  delay(2000);
+  //servo_write(RAISE);
+  //servo_write(DOWN);
+  //color_read();
+  //judge_color();
+  /*Serial.print(tpr_r);
+  Serial.print(",");
+  Serial.println(tpr_l);
+  Serial.print(lr);
+  Serial.print(",");
+  Serial.print(lg);
+  Serial.print(",");
+  Serial.print(lb);
+  Serial.print(",");
+  Serial.print(rr);
+  Serial.print(",");
+  Serial.print(rg);
+  Serial.print(",");
+  Serial.println(rb);*//*
+  Serial.println((float)lg/lr);*//*
+  for(int i = 0;i < 5;i++){
+    Serial.print(Line_Sensor[i]);
+    Serial.print(",");
+  }
+  Serial.println("");//*/
+  //check_bmx();
+  /*bmx_read();
+  Serial.print(xMag);
+  Serial.print(",");
+  Serial.print(yMag);
+  Serial.print(",");
+  Serial.println(atan2(yMag,xMag) * 180 / PI);//*/
+  /*color_read();
+  judge_color();
+  p_trace();
+  check_color();*/
+}
+
 void loop() {
-  test_sensor_loop();
-  return;
+  //test_sensor_loop();
+  //return;
   //カラーセンサー読み取り
   #ifdef COLOR_DEBUG
   test_sensor_loop();
@@ -791,52 +884,32 @@ void loop() {
   return;
   #endif
   if(state == TRACE){//ライントレースプログラム
+  //check_color();
     color_read();
     judge_color();
+    Serial.println(silver);
     if(isSilver){
       isSilver = false;
-      state == RESCUE;
+      state = RESCUE;
+      Serial.println("SILVER DETECTED");
       return;
     }
-    if(touch_sensor()){
+    /*if(touch_sensor()){
       //回避動作開始
       avoid_object();
       return;
-    }
+    }*/
     //特殊処理発生かどうか知りたい
     if((Line_Sensor[1] == WHITE || Line_Sensor[1] == BLACK) 
         && (Line_Sensor[3] == WHITE || Line_Sensor[3] == BLACK)){
-      //白黒処理
-      if(Line_Sensor[2] == BLACK){
-        //真ん中黒
-        //がんばえ
-        if(Line_Sensor[1] == WHITE && Line_Sensor[3] == WHITE){
-          //完璧なので喘息前進ダ！
-          motor_write(192,192);
-        }
-        else{
-          //互いに白黒の時なのでP制御
-          p_trace();
-        }
-      }else{
-        //真ん中白
-        //がんばえ
-        if(Line_Sensor[0] == WHITE && Line_Sensor[1] == WHITE 
-          && Line_Sensor[3] == WHITE && Line_Sensor[4] == WHITE){
-            //全部白の時の処理
-            //直進だよ！
-            motor_write(192,192);
-          }else{
-            //どれかが黒の時
-            p_trace();
-          }
-      }
+      p_trace();
     }else if(Line_Sensor[1] == RED || Line_Sensor[3] == RED){
       //赤処理
       motor_write(0,0);
       delay(1000000);
     }else if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
       //緑処理
+      Serial.println("Green Greens");
       detect_green();
     }else{
       Serial.println("Strange Error:No Color Found");
