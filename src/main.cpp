@@ -66,6 +66,9 @@
 const float RC = 0.5;
 int before_x,before_y;
 
+//救助コーナー内でライン検知しちゃったとき
+#define BACK_LINE 1000
+
 //Enum
 enum Color{BLACK,WHITE,GREEN,RED,SILVER};
 enum Bucket{RAISE,DOWN,RELEASE,HOLD};
@@ -758,82 +761,90 @@ void looking_corner(){
   //三角コーナーからの逃亡コード
   servo_write(DOWN);
   motor_write(128,128);
-  while(digitalRead(P_T_R) == HIGH && digitalRead(P_T_L) == HIGH){
+  while(digitalRead(P_T_R) == LOW && digitalRead(P_T_L) == LOW){
     //まっすぐ進む
-    motor_write(128,128);
+    motor_write(48,48);
     color_read();
     judge_color();
     if(Line_Sensor[1] != WHITE || Line_Sensor[3] != WHITE || isSilver){
       motor_write(0,0);
+      buzzer(850);
+      motor_write(-48,-48);
+      delay(BACK_LINE);
+      motor_write(0,0);
       delay(500);
-      return;
+      rotate(90,0);
+      delay(500);
     }
   }
-  delay(500);
+  delay(250);
   motor_write(0,0);
   if(digitalRead(P_T_R) == LOW && digitalRead(P_T_L) == LOW){
     //違うらしいよ
     //右に回転
+    rotate(90,0);
     return;
   }else{
+    //三角コーナーじゃん！
+    servo_write(RAISE);
     bmx_read();
     rotate(135,0);
     motor_write(-64,-64);
     while(digitalRead(P_T_B) == HIGH);
-    delay(500);
+    delay(250);
     motor_write(0,0);
     if(analogRead(P_TPR_B) > B_TPR_BORDER){
       //黒の時
       servo_write(RELEASE);
-      delay(1500);
+      delay(500);
       servo_write(HOLD);
       for(int i = 0;i < 3;i++){
-        motor_write(128,128);
+        motor_write(48,48);
         delay(500);
         motor_write(0,0);
         delay(250);
-        motor_write(-128,-128);
-        while(digitalRead(P_T_B) == HIGH);
+        motor_write(-48,-48);
+        while(digitalRead(P_T_B) == LOW);
         motor_write(0,0);
         servo_write(RELEASE);
         delay(1500);
         servo_write(HOLD);
-        servo_write(RAISE);
         delay(250);
       }
       rotate(-45,0);
       color_read();
       judge_color();
-      motor_write(192,192);
+      motor_write(48,48);
       while(Line_Sensor[1] == WHITE && Line_Sensor[3] == WHITE){
         color_read();
         judge_color();
-        if(Line_Sensor[1] != WHITE || Line_Sensor[3] != WHITE || isSilver){
-          if(isSilver){
-            //銀なので間違い
-            isSilver = false;
-            motor_write(0,0);
-            delay(250);
-            motor_write(-64,-64);
-            delay(250);
-            motor_write(0,0);
-            //右に回転
-            rotate(90,0);
-            motor_write(192,192);
-          }else if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
-            //脱出完了
-            delay(100);
-            state = TRACE;
-            return;
-          }
-        }
         if(analogRead(P_T_M) == LOW){
           //壁にぶつかった時
           motor_write(0,0);
           delay(250);
           //右に回転
           rotate(90,0);
-          motor_write(192,192);
+          motor_write(48,48);
+        }
+        if(Line_Sensor[1] != WHITE || Line_Sensor[3] != WHITE || isSilver){
+          if(isSilver){
+            //銀なので間違い
+            isSilver = false;
+            motor_write(0,0);
+            delay(250);
+            motor_write(-48,-48);
+            delay(BACK_LINE);
+            motor_write(0,0);
+            //右に回転
+            rotate(90,0);
+            motor_write(48,48);
+          }else if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
+            //脱出完了
+            delay(250);
+            state = TRACE;
+            motor_write(0,0);
+            return;
+          }
         }
       }
     }else{
@@ -1042,7 +1053,7 @@ void loop() {
       Serial.println("Other Line Detected");
       buzzer(1500);
       motor_write(-48,-48);
-      delay(1000);
+      delay(BACK_LINE);
       motor_write(0,0);
     }
     //この辺どうしよう、バケットの負荷大丈夫？
@@ -1074,7 +1085,6 @@ void loop() {
     count++;
   }else if(state == CORNER){
     //右に回転
-    rotate(90,0);
     looking_corner();
   }
 }
