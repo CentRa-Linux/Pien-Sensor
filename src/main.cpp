@@ -19,7 +19,7 @@
 ///////////////////////////////////////////////*/
 #include <Arduino.h>
 #include <Wire.h>
-#include <Adafruit_PWMServoDriver.h>
+#include <PCA9685.h>>
 
 //ピン指定
 #define P_TPR_R A12
@@ -57,7 +57,7 @@
 
 //Servo's Hz Min And Max
 #define SERVO_MIN 150
-#define SERVO_MAX 500
+#define SERVO_MAX 480
 
 //三角コーナー探すモードかどうか
 #define CORNER_BORDER 3
@@ -75,8 +75,8 @@ enum State{TRACE,RESCUE,CORNER};
 int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r,xMag,yMag,zMag,count = 0;
 
 //bmxのオフセット
-const int bmx_x_os = 5;
-const int bmx_y_os = 34;
+const int bmx_x_os = 10;
+const int bmx_y_os = 16;
 
 //右から左へ
 Color Line_Sensor[5];
@@ -86,7 +86,7 @@ Color Previous_Line_Sensor[5];
 State state = TRACE;
 
 //PCA9685変数
-Adafruit_PWMServoDriver servo = Adafruit_PWMServoDriver(0x41);
+PCA9685 pwm = PCA9685(0x40);// PCA9685のI2Cアドレスを指定
 
 //silver
 bool isSilver = false;
@@ -96,7 +96,10 @@ long timer;
 
 //前回の値保持(P操作量)
 int volume;
-int previous_volume;
+int previous_volume; 
+ 
+ int Servo_Pin = 0;      // サーボ接続ピンを0番に
+ int angle;
 
 //TCA9548A
 void change_i2c_port(int byte){
@@ -126,10 +129,10 @@ void judge_color(){
   #define LB_BORDER 200
   #define LIR_BORDER 200
   #define R_TPR_BORDER 450
-  #define M_TPR_BORDER 25
+  #define M_TPR_BORDER 28
   #define L_TPR_BORDER 450
   #define B_TPR_BORDER 100
-  #define SILVER_BORDER 100
+  #define SILVER_BORDER 500
   #define R_GpR_MIN 1.0
   #define R_GpR_MAX 1.7
   #define L_GpR_MIN 1.0
@@ -353,25 +356,33 @@ void test_sensor_setup(){
 void servo_write(Bucket mode){
   change_i2c_port(3);
   if(mode == RAISE){
-    servo.setPWM(0,0,SERVO_MAX);
-    servo.setPWM(1,0,SERVO_MAX);
-  }else if(mode == DOWN){
-    servo.setPWM(0,0,SERVO_MIN);
-    servo.setPWM(1,0,SERVO_MIN);
-  }else if(mode == RELEASE){
+    buzzer(190);
+    angle = 0;
+    angle = map(angle, 0, 180, SERVO_MIN, SERVO_MAX);
+    pwm.setPWM(0,0,SERVO_MAX);
+    pwm.setPWM(8,0,SERVO_MIN);
+    delay(1000);
+  }
+  else if(mode == DOWN){
+    buzzer(290);
+    angle = 180;
+    angle = map(angle, 0, 180, SERVO_MIN, SERVO_MAX);
+    pwm.setPWM(0,0,SERVO_MIN);
+    pwm.setPWM(8,0,SERVO_MAX);   
+    delay(1000);
+  }/*else if(mode == RELEASE){
     servo.setPWM(2,0,SERVO_MAX);
   }else if(mode == HOLD){
     servo.setPWM(2,0,SERVO_MIN);
-  }
-  delay(500);
+  }*/
 }
 
 void setup(){
-  #ifdef COLOR_DEBUG
+  /*#ifdef COLOR_DEBUG
   //ほげー
   test_sensor_setup();
   return;
-  #endif
+  #endif*/
   //ピンセット
   pinMode(P_TPR_R,INPUT);
   pinMode(P_TPR_M,INPUT);
@@ -395,8 +406,12 @@ void setup(){
   pinMode(BZ,OUTPUT);
   // シリアル開始
   Serial.begin(9600);
-  //I2Cスタート
+  //サーボ初期化・I2Cスタート
   Wire.begin();
+  change_i2c_port(3);
+  pwm.begin();
+  pwm.setPWMFreq(50);
+  delay(1000);
   change_i2c_port(0);
   Wire.beginTransmission(S11059_ADDR);
   Wire.write(CONTROL_MSB);
@@ -419,9 +434,6 @@ void setup(){
   Wire.endTransmission();
   //地磁気センサーリセット
   bmx_init();
-  //サーボ初期化
-  //servo.setPWMFreq(50);
-  //servo_write(RAISE);
   //強制停止割り込み
   //attachInterrupt(2,interrupt,FALLING);
 }
@@ -468,11 +480,11 @@ void motor_write(int right,int left){
 
 void p_trace(){
   #define GAIN 0.6
-  #define BASE 48
+  #define BASE 36
   #define MOTOR_MAX 60
   #define MOTOR_MIN -60
   #define GREEN_VALUE 10
-  #define OUTSIDE 3.0
+  #define OUTSIDE 6.0
   #define INSIDE 1.0
   const int r_target = 425;
   const int l_target = 480;
@@ -526,8 +538,8 @@ void check_bmx(){
 
 void rotate(int angle,int mode){
   #define ALLOW_DIF 5
-  #define BEGIN_CHECK 60
-  #define DELAY_TIME 400
+  #define BEGIN_CHECK 65
+  #define DELAY_TIME 150
   Serial.println("begin to rotate");
   motor_write(0,0);
   delay(500);
@@ -596,7 +608,7 @@ void rotate(int angle,int mode){
 }
 
 void detect_green(){
-  #define STRAIGHT 300
+  #define STRAIGHT 400
   #define GREEN_TIME 250
   bool isRightGreen = false;
   bool isLeftGreen = false;
@@ -885,15 +897,19 @@ void p_trace_v2(){
 }
 
 void test_sensor_loop(){
+  servo_write(RAISE);
+  delay(2000);
+  servo_write(DOWN);
+  delay(2000);
   /*rotate(90);
   delay(2000);
   rotate(-90);
   delay(2000);
   //servo_write(RAISE);
   //servo_write(DOWN);*/
-  color_read();
+  /*color_read();
   judge_color();
-  Serial.println(tpr_m);/*
+  Serial.println(silver);/*
   Serial.print(rr);
   Serial.print(",");
   Serial.print(rg);
@@ -929,6 +945,7 @@ void test_sensor_loop(){
 }
 
 void loop() {
+  //check_bmx();
   //test_sensor_loop();
   //return;
   //カラーセンサー読み取り
@@ -960,9 +977,13 @@ void loop() {
     judge_color();
     //Serial.println(silver);
     if(isSilver){
+      motor_write(0,0);
+      buzzer(750);
       isSilver = false;
       state = RESCUE;
       Serial.println("SILVER DETECTED");
+      motor_write(36,36);
+      delay(500);
       return;
     }
     if(touch_sensor()){
@@ -996,7 +1017,7 @@ void loop() {
     }
   }else if(state == RESCUE){
     //救助コード
-    if(sonic_sensor_right() < CORNER_BORDER || sonic_sensor_left < CORNER_BORDER){
+    /*if(sonic_sensor_right() < CORNER_BORDER || sonic_sensor_left < CORNER_BORDER){
       //壁にぎりぎりなら
       if(count == 0);
       else{
@@ -1005,36 +1026,27 @@ void loop() {
         Serial.println("change to corner mode");
         return;
       }
-    }
+    }*/
     motor_write(0,0);
     servo_write(DOWN);
-    float r_soinc,l_sonic;
-    r_soinc = sonic_sensor_right();
-    l_sonic = sonic_sensor_left();
-    motor_write(64,64);
     color_read();
     judge_color();
-    while(digitalRead(P_T_R) == HIGH && digitalRead(P_T_L) == HIGH
+    while(/*digitalRead(P_T_R) == HIGH && digitalRead(P_T_L) == HIGH*/digitalRead(P_T_M) == LOW
     && Line_Sensor[1] == WHITE && Line_Sensor[3] == WHITE){
       color_read();
       judge_color();
-      int r_er = sonic_sensor_right() - r_soinc;
-      int l_er = sonic_sensor_left() - l_sonic;
-      motor_write(128 + l_er,128 + r_er);
+      motor_write(36,36);
     }
+    motor_write(0,0);
     if(Line_Sensor[1] != WHITE || Line_Sensor[3] != WHITE){
       Serial.println("Other Line Detected");
-      motor_write(0,0);
-      delay(500);
+      buzzer(1500);
       motor_write(-48,-48);
       delay(1000);
       motor_write(0,0);
     }
     //この辺どうしよう、バケットの負荷大丈夫？
     //もしあれなら超音波使ったほうがいいかもね
-    delay(500);
-    motor_write(0,0);
-    delay(100);
     servo_write(RAISE);
     if(count % 2 == 0){
       //もし奇数回目なら左に回転？
@@ -1055,6 +1067,10 @@ void loop() {
       rotate(90,0);
       //その後右に回転
     }
+    delay(500);
+    motor_write(-36,-36);
+    while(digitalRead(P_T_M) == LOW);
+    motor_write(0,0);
     count++;
   }else if(state == CORNER){
     //右に回転
