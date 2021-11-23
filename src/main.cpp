@@ -19,7 +19,26 @@
 ///////////////////////////////////////////////*/
 #include <Arduino.h>
 #include <Wire.h>
-#include <PCA9685.h>>
+#include <PCA9685.h>
+
+//ただのバカ
+#define A 440
+#define B 495
+#define C 528
+#define D 586
+#define E 660
+#define F 704
+#define Fs 740
+#define G 782
+#define hiA 880
+#define hiB B*2
+#define hiC C*2
+#define hiD D*2
+#define hiE E*2
+#define hiF F*2
+#define hiG G*2
+#define hiAf 830
+#define off 1
 
 //ピン指定
 #define P_TPR_R A12
@@ -33,9 +52,9 @@
 #define P_M_BPWM 5
 #define P_M_B1 7
 #define P_M_B2 6
-#define P_S_RT 51
+#define P_S_RT 53
 #define P_S_LT 24
-#define P_S_RE 53
+#define P_S_RE 51
 #define P_S_LE 26
 #define P_T_R 50
 #define P_T_M 52
@@ -60,7 +79,7 @@
 #define SERVO_MAX 480
 
 //三角コーナー探すモードかどうか
-#define CORNER_BORDER 3
+#define CORNER_BORDER 6.0
 
 //RCフィルタ(0 < x < 1)
 const float RC = 0.5;
@@ -78,8 +97,8 @@ enum State{TRACE,RESCUE,CORNER};
 int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r,xMag,yMag,zMag,count = 0;
 
 //bmxのオフセット
-const int bmx_x_os = 10;
-const int bmx_y_os = 16;
+const int bmx_x_os = 22;
+const int bmx_y_os = 20;
 
 //右から左へ
 Color Line_Sensor[5];
@@ -104,6 +123,16 @@ int previous_volume;
  int Servo_Pin = 0;      // サーボ接続ピンを0番に
  int angle;
 
+//愚かだなぁ
+int tune;
+int t;
+void oto(int tune,int t,int d) {
+    tone(9,tune);
+    delay(t);
+    noTone(9);
+    delay(d);
+}
+
 //TCA9548A
 void change_i2c_port(int byte){
   Wire.beginTransmission(0x70);
@@ -124,11 +153,11 @@ void interrupt(){
 
 void judge_color(){
   #define RR_BORDER 250
-  #define RG_BORDER 260
+  #define RG_BORDER 290
   #define RB_BORDER 260
   #define RIR_BORDER 200
   #define LR_BORDER 268
-  #define LG_BORDER 310
+  #define LG_BORDER 340
   #define LB_BORDER 200
   #define LIR_BORDER 200
   #define R_TPR_BORDER 450
@@ -441,17 +470,6 @@ void setup(){
   //attachInterrupt(2,interrupt,FALLING);
 }
 
-void check_voltage(){
-  if(analogRead(A0) < 655){
-    while(true){
-      tone(BZ,440);
-      delay(1000);
-      noTone(BZ);
-      delay(1000);
-    }
-  }
-}
-
 void motor_write(int right,int left){
   //right
   if(right == 0){
@@ -478,6 +496,17 @@ void motor_write(int right,int left){
     digitalWrite(P_M_B1,LOW);
     digitalWrite(P_M_B2,HIGH);
     analogWrite(P_M_BPWM,abs(left));
+  }
+}
+
+void check_voltage(){
+  int ahobakashine = analogRead(A0);
+  if(ahobakashine < 580){
+    motor_write(0,0);
+    while(true){
+      buzzer(440);
+      delay(1000);
+    }
   }
 }
 
@@ -542,7 +571,7 @@ void check_bmx(){
 void rotate(int angle,int mode){
   #define ALLOW_DIF 5
   #define BEGIN_CHECK 65
-  #define DELAY_TIME 150
+  #define DELAY_TIME 250
   Serial.println("begin to rotate");
   motor_write(0,0);
   delay(500);
@@ -725,7 +754,7 @@ void avoid_object(){
   rotate(-90,0);
   delay(250);
   motor_write(36,36);
-  delay(500);
+  delay(100);
   while(Line_Sensor[0] == WHITE && Line_Sensor[4] == WHITE){
     if(sonic_sensor_right() > distance + allow_miss){
       motor_write(24,24 * (distance + VEHCLE) / distance);
@@ -760,8 +789,8 @@ void check_color(){
 void looking_corner(){
   //三角コーナーからの逃亡コード
   servo_write(DOWN);
-  motor_write(128,128);
-  while(digitalRead(P_T_R) == LOW && digitalRead(P_T_L) == LOW){
+  motor_write(48,48);
+  while(digitalRead(P_T_M) == LOW/*digitalRead(P_T_R) == LOW && digitalRead(P_T_L) == LOW*/){
     //まっすぐ進む
     motor_write(48,48);
     color_read();
@@ -790,35 +819,36 @@ void looking_corner(){
     bmx_read();
     rotate(135,0);
     motor_write(-64,-64);
-    while(digitalRead(P_T_B) == HIGH);
+    while(digitalRead(P_T_M) == LOW);
     delay(250);
     motor_write(0,0);
-    if(analogRead(P_TPR_B) > B_TPR_BORDER){
+    if(true/*analogRead(P_TPR_B) > B_TPR_BORDER*/){
       //黒の時
       servo_write(RELEASE);
       delay(500);
       servo_write(HOLD);
       for(int i = 0;i < 3;i++){
         motor_write(48,48);
-        delay(500);
+        delay(1500);
         motor_write(0,0);
         delay(250);
         motor_write(-48,-48);
-        while(digitalRead(P_T_B) == LOW);
+        while(digitalRead(P_T_M) == LOW);
         motor_write(0,0);
         servo_write(RELEASE);
-        delay(1500);
+        delay(500);
         servo_write(HOLD);
         delay(250);
       }
       rotate(-45,0);
+      buzzer(600);
       color_read();
       judge_color();
       motor_write(48,48);
-      while(Line_Sensor[1] == WHITE && Line_Sensor[3] == WHITE){
+      while(true){
         color_read();
         judge_color();
-        if(analogRead(P_T_M) == LOW){
+        if(digitalRead(P_T_M) == HIGH){
           //壁にぶつかった時
           motor_write(0,0);
           delay(250);
@@ -827,23 +857,26 @@ void looking_corner(){
           motor_write(48,48);
         }
         if(Line_Sensor[1] != WHITE || Line_Sensor[3] != WHITE || isSilver){
-          if(isSilver){
+          if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
+            //脱出完了
+            motor_write(0,0);
+            buzzer(4000);
+            motor_write(48,48);
+            delay(500);
+            motor_write(0,0);
+            state = TRACE;
+            return;
+          }else if(isSilver){
             //銀なので間違い
             isSilver = false;
             motor_write(0,0);
-            delay(250);
+            buzzer(1000);
             motor_write(-48,-48);
             delay(BACK_LINE);
             motor_write(0,0);
             //右に回転
             rotate(90,0);
             motor_write(48,48);
-          }else if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
-            //脱出完了
-            delay(250);
-            state = TRACE;
-            motor_write(0,0);
-            return;
           }
         }
       }
@@ -907,20 +940,157 @@ void p_trace_v2(){
   motor_write(128 + operation /2,128 - operation / 2);
 }
 
+void famima(){
+  int d;
+  d=40;
+  oto(Fs,7*d,d);
+  oto(D,7*d,d);
+  oto(A,7*d,d);
+  oto(D,7*d,d);
+  oto(E,7*d,d);
+  oto(hiA,7*d,8*d);
+  oto(A,7*d,d);
+  oto(E,7*d,d);
+  oto(Fs,7*d,d);
+  oto(E,7*d,d);
+  oto(A,7*d,d);
+  oto(D,7*d,d);
+}
+
+void saua(){
+  int d;
+  d=20;
+  //zensou
+  oto(D,4*d,8*d);
+  oto(D,4*d,8*d);
+  oto(C,7*d,d);
+  oto(D,4*d,8*d);
+  oto(D,4*d,8*d);
+  oto(C,7*d,d);
+  oto(D,4*d,8*d);
+  oto(D,4*d,8*d);
+  oto(C,7*d,d);
+  oto(D,15*d,d);
+  oto(F,15*d,d);
+  oto(D,4*d,8*d);
+  oto(D,4*d,8*d);
+  oto(C,7*d,d);
+  oto(D,4*d,8*d);
+  oto(D,4*d,8*d);
+  oto(C,7*d,d);
+  oto(D,15*d,d);
+  oto(F,15*d,d);
+  oto(G,15*d,d);
+  oto(hiA,15*d,d);
+  // Amero
+  oto(G,7*d,d);
+  oto(hiA,7*d,d);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(G,7*d,d);
+  oto(hiA,7*d,d);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(G,7*d,d);
+  oto(hiA,7*d,d);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(F,8*d,0);
+  oto(E,2.5*d,0);
+  oto(F,2.5*d,0);
+  oto(E,2.5*d,0.5);
+  oto(D,8*d,0);
+  oto(C,8*d,0);
+  oto(G,7*d,d);
+  oto(hiA,7*d,d);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(G,7*d,d);
+  oto(hiA,7*d,d);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(G,8*d,0);
+  oto(hiA,8*d,0);
+  oto(hiC,8*d,0);
+  oto(hiF,8*d,0);
+  oto(hiE,4*d,0);
+  oto(hiF,4*d,0);
+  oto(hiE,4*d,0);
+  oto(hiD,4*d,0);
+  oto(hiC,8*d,0);
+  oto(hiA,8*d,0);
+  //Amero ushio
+  oto(G,7*d,d);
+  oto(hiA,7*d,d);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(G,7*d,d);
+  oto(hiA,7*d,d);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(G,7*d,d);
+  oto(hiA,7*d,d);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(D,4*d,0);
+  oto(C,4*d,0);
+  oto(F,8*d,0);
+  oto(E,2.5*d,0);
+  oto(F,2.5*d,0);
+  oto(E,2.5*d,0.5);
+  oto(D,8*d,0);
+  oto(C,8*d,0);
+  oto(D,8*d,0);
+  oto(C,4*d,0);
+  oto(D,4*d,0);
+  oto(F,8*d,0);
+  oto(D,4*d,0);
+  oto(G,4*d,0);
+  oto(hiA,8*d,0);
+  oto(G,4*d,0);
+  oto(hiA,4*d,0);
+  oto(hiC,4*d,0);
+  oto(hiF,4*d,0);
+  oto(hiA,4*d,0);
+  oto(hiC,4*d,0);
+  oto(hiF,8*d,0);
+  oto(hiE,2*d,0);
+  oto(hiF,4*d,0);
+  oto(hiE,2*d,0);
+  oto(hiD,8*d,0);
+  oto(hiC,8*d,0);
+  oto(hiD,12*d,0);
+}
+
 void test_sensor_loop(){
-  servo_write(RAISE);
+  //motor_write(72,0);
+  /*servo_write(RAISE);
   delay(2000);
   servo_write(DOWN);
-  delay(2000);
+  delay(2000);*/
   /*rotate(90);
   delay(2000);
   rotate(-90);
   delay(2000);
   //servo_write(RAISE);
   //servo_write(DOWN);*/
-  /*color_read();
-  judge_color();
-  Serial.println(silver);/*
+  color_read();
+  judge_color();/*
+  Serial.println(silver);*/
   Serial.print(rr);
   Serial.print(",");
   Serial.print(rg);
@@ -940,7 +1110,7 @@ void test_sensor_loop(){
     Serial.print(Line_Sensor[i]);
     Serial.print(",");
   }
-  Serial.println("");//*/
+  Serial.println("");
   //check_bmx();
   /*bmx_read();
   Serial.print(xMag);
@@ -982,6 +1152,7 @@ void loop() {
   Serial.print('\n');
   return;
   #endif
+  check_voltage();
   if(state == TRACE){//ライントレースプログラム
   //check_color();
     color_read();
@@ -989,10 +1160,10 @@ void loop() {
     //Serial.println(silver);
     if(isSilver){
       motor_write(0,0);
-      buzzer(750);
       isSilver = false;
       state = RESCUE;
       Serial.println("SILVER DETECTED");
+      famima();
       motor_write(36,36);
       delay(500);
       return;
@@ -1013,11 +1184,11 @@ void loop() {
     }else if(Line_Sensor[1] == RED || Line_Sensor[3] == RED){
       //赤処理
       motor_write(0,0);
-      buzzer(2000);
       Serial.print((float)rg/rr);
       Serial.print(",");
       Serial.println((float)lg/lr);
       Serial.println("Mission Failed:Respcet +");
+      saua();
       while(true);
     }else if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
       //緑処理
@@ -1028,16 +1199,18 @@ void loop() {
     }
   }else if(state == RESCUE){
     //救助コード
-    /*if(sonic_sensor_right() < CORNER_BORDER || sonic_sensor_left < CORNER_BORDER){
+    if(sonic_sensor_right() < CORNER_BORDER/*|| sonic_sensor_left < CORNER_BORDER*/){
       //壁にぎりぎりなら
       if(count == 0);
       else{
         //三角コーナー探すモード切替
         state = CORNER;
         Serial.println("change to corner mode");
+        motor_write(0,0);
+        buzzer(334);
         return;
       }
-    }*/
+    }
     motor_write(0,0);
     servo_write(DOWN);
     color_read();
