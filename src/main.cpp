@@ -79,7 +79,10 @@
 #define SERVO_MAX 480
 
 //三角コーナー探すモードかどうか
-#define CORNER_BORDER 6.0
+#define CORNER_BORDER 10.0
+
+//救助コーナーで曲がるほう
+#define ROTATE_BORDER 20.0
 
 //RCフィルタ(0 < x < 1)
 const float RC = 0.5;
@@ -91,7 +94,7 @@ int before_x,before_y;
 //Enum
 enum Color{BLACK,WHITE,GREEN,RED,SILVER};
 enum Bucket{RAISE,DOWN,RELEASE,HOLD};
-enum State{TRACE,RESCUE,CORNER};
+enum State{TRACE,RESCUE,CORNER,SENPAN};
 
 //int
 int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r,xMag,yMag,zMag,count = 0;
@@ -521,7 +524,7 @@ void servo_write(Bucket mode){
 }
 
 void check_voltage(){
-  int ahobakashine = analogRead(A0);
+  int ahobakashine = analogRead(A11);
   if(ahobakashine < 560){
     motor_write(0,0);
     while(true){
@@ -931,12 +934,18 @@ void nakamura_is_senpan(){
     judge_color();
     if(digitalRead(P_T_M) == HIGH){
       motor_write(0,0);
-      delay(250);
-      rotate(90,0);
+      if(sonic_sensor_right() > ROTATE_BORDER){
+        rotate(90,0);
+      }else if(sonic_sensor_left() > ROTATE_BORDER){
+        rotate(-90,0);
+      }else{
+        rotate(-90,0);
+      }
       motor_write(48,48);
     }
     if(Line_Sensor[1] != WHITE || Line_Sensor[3] != WHITE || isSilver){
-      if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
+      if(isSilver){
+        isSilver = false;
         motor_write(0,0);
         famima();
         motor_write(48,48);
@@ -944,7 +953,7 @@ void nakamura_is_senpan(){
         motor_write(0,0);
         state = TRACE;
         return;
-      }else if(silver){
+      }else if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
         isSilver = false;
         motor_write(0,0);
         buzzer(1000);
@@ -952,7 +961,7 @@ void nakamura_is_senpan(){
         delay(BACK_LINE);
         motor_write(0,0);
         //右に回転
-        rotate(90,0);
+        rotate(-90,0);
         motor_write(48,48);
       }
     }
@@ -1136,6 +1145,10 @@ void test_sensor_loop(){
   delay(2000);
   //servo_write(RAISE);
   //servo_write(DOWN);*/
+  Serial.print(sonic_sensor_right());
+  Serial.print(",");
+  Serial.println(sonic_sensor_left());
+  return;
   color_read();
   judge_color();
   Serial.println(silver);
@@ -1249,11 +1262,11 @@ void loop() {
     if(isSilver){
       motor_write(0,0);
       isSilver = false;
-      state = RESCUE;
+      state = SENPAN;
       Serial.println("SILVER DETECTED");
       famima();
-      motor_write(36,36);
-      delay(500);
+      motor_write(48,48);
+      delay(2000);
       return;
     }
     if(touch_sensor()){
@@ -1335,7 +1348,7 @@ void loop() {
     }
   }else if(state == RESCUE){
     //救助コード
-    if(sonic_sensor_right() < CORNER_BORDER/*|| sonic_sensor_left < CORNER_BORDER*/){
+    if(sonic_sensor_right() < CORNER_BORDER || sonic_sensor_left() < CORNER_BORDER){
       //壁にぎりぎりなら
       if(count == 0);
       else{
@@ -1351,11 +1364,14 @@ void loop() {
     servo_write(DOWN);
     color_read();
     judge_color();
+    float r_onigiri,l_onigiri;
+    r_onigiri = sonic_sensor_right();
+    l_onigiri = sonic_sensor_left();
     while(/*digitalRead(P_T_R) == HIGH && digitalRead(P_T_L) == HIGH*/digitalRead(P_T_M) == LOW
     && Line_Sensor[1] == WHITE && Line_Sensor[3] == WHITE){
       color_read();
       judge_color();
-      motor_write(36,36);
+      //motor_write(36,36);
     }
     motor_write(0,0);
     if(Line_Sensor[1] != WHITE || Line_Sensor[3] != WHITE){
@@ -1395,5 +1411,7 @@ void loop() {
   }else if(state == CORNER){
     //右に回転
     looking_corner();
+  }else if(state == SENPAN){
+    nakamura_is_senpan();
   }
 }
