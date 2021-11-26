@@ -53,9 +53,9 @@
 #define P_M_B1 7
 #define P_M_B2 6
 #define P_S_RT 53
-#define P_S_LT 24
+#define P_S_LT 47
 #define P_S_RE 51
-#define P_S_LE 26
+#define P_S_LE 49
 #define P_T_R 50
 #define P_T_M 52
 #define P_T_L 48
@@ -97,8 +97,8 @@ enum State{TRACE,RESCUE,CORNER};
 int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r,xMag,yMag,zMag,count = 0;
 
 //bmxのオフセット
-const int bmx_x_os = 22;
-const int bmx_y_os = 20;
+const int bmx_x_os = 15;
+const int bmx_y_os = 18;
 
 //右から左へ
 Color Line_Sensor[5];
@@ -123,11 +123,14 @@ int previous_volume;
  int Servo_Pin = 0;      // サーボ接続ピンを0番に
  int angle;
 
+ //前回のオール白の時の時間
+ long white_time;
+
 //愚かだなぁ
 int tune;
 int t;
 void oto(int tune,int t,int d) {
-    tone(9,tune);
+    tone(BZ,tune);
     delay(t);
     noTone(9);
     delay(d);
@@ -164,7 +167,7 @@ void judge_color(){
   #define M_TPR_BORDER 28
   #define L_TPR_BORDER 450
   #define B_TPR_BORDER 100
-  #define SILVER_BORDER 500
+  #define SILVER_BORDER 600
   #define R_GpR_MIN 1.0
   #define R_GpR_MAX 1.7
   #define L_GpR_MIN 1.0
@@ -242,7 +245,138 @@ void judge_color(){
   }
 }
 
+void bmx_init(){
+  change_i2c_port(2);
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x4B);  // Select Mag register
+  Wire.write(0x83);  // Soft reset
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x4B);  // Select Mag register
+  Wire.write(0x01);  // Soft reset
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x4C);  // Select Mag register
+  Wire.write(0x00);  // Normal Mode, ODR = 10 Hz
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x4E);  // Select Mag register
+  Wire.write(0x84);  // X, Y, Z-Axis enabled
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x51);  // Select Mag register
+  Wire.write(0x04);  // No. of Repetitions for X-Y Axis = 9
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x52);  // Select Mag register
+  Wire.write(0x16);  // No. of Repetitions for Z-Axis = 15
+  Wire.endTransmission();
+}
+
+void i2c_init(){
+  Wire.begin();
+  change_i2c_port(3);
+  pwm.begin();
+  pwm.setPWMFreq(50);
+  delay(1000);
+  change_i2c_port(0);
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(CONTROL_MSB);
+  Wire.write(CONTROL_1_LSB);
+  Wire.endTransmission();
+  change_i2c_port(1);
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(CONTROL_MSB);
+  Wire.write(CONTROL_1_LSB);
+  Wire.endTransmission();
+  change_i2c_port(0);
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(CONTROL_MSB);
+  Wire.write(CONTROL_2_LSB);
+  Wire.endTransmission();
+  change_i2c_port(1);
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(CONTROL_MSB);
+  Wire.write(CONTROL_2_LSB);
+  Wire.endTransmission();
+  //地磁気センサーリセット
+  bmx_init();
+}
+
+void setup(){
+  /*#ifdef COLOR_DEBUG
+  //ほげー
+  test_sensor_setup();
+  return;
+  #endif*/
+  //ピンセット
+  pinMode(P_TPR_R,INPUT);
+  pinMode(P_TPR_M,INPUT);
+  pinMode(P_TPR_L,INPUT);
+  pinMode(P_SILVER,INPUT);
+  pinMode(P_TPR_B,INPUT);
+  pinMode(P_M_APWM,OUTPUT);
+  pinMode(P_M_A1,OUTPUT);
+  pinMode(P_M_A2,OUTPUT);
+  pinMode(P_M_BPWM,OUTPUT);
+  pinMode(P_M_B1,OUTPUT);
+  pinMode(P_M_B2,OUTPUT);
+  pinMode(P_S_RT,OUTPUT);
+  pinMode(P_S_LT,OUTPUT);
+  pinMode(P_S_RE,INPUT);
+  pinMode(P_S_LE,INPUT);
+  pinMode(P_T_R,INPUT);
+  pinMode(P_T_M,INPUT);
+  pinMode(P_T_L,INPUT);
+  pinMode(P_T_B,INPUT);
+  pinMode(BZ,OUTPUT);
+  // シリアル開始
+  Serial.begin(9600);
+  //サーボ初期化・I2Cスタート
+  i2c_init();
+  //強制停止割り込み
+  //attachInterrupt(2,interrupt,FALLING);
+}
+
+void motor_write(int right,int left){
+  //right
+  if(right == 0){
+    digitalWrite(P_M_A1,LOW);
+    digitalWrite(P_M_A2,LOW);
+  }else if(right > 0){
+    digitalWrite(P_M_A1,HIGH);
+    digitalWrite(P_M_A2,LOW);
+    analogWrite(P_M_APWM,abs(right));
+  }else{
+    digitalWrite(P_M_A1,LOW);
+    digitalWrite(P_M_A2,HIGH);
+    analogWrite(P_M_APWM,abs(right));
+  }
+  //left
+  if(left == 0){
+    digitalWrite(P_M_B1,LOW);
+    digitalWrite(P_M_B2,LOW);
+  }else if(left > 0){
+    digitalWrite(P_M_B1,HIGH);
+    digitalWrite(P_M_B2,LOW);
+    analogWrite(P_M_BPWM,abs(left));
+  }else{
+    digitalWrite(P_M_B1,LOW);
+    digitalWrite(P_M_B2,HIGH);
+    analogWrite(P_M_BPWM,abs(left));
+  }
+}
+
+void restart_i2c(){
+  Wire.end();
+  motor_write(0,0);
+  buzzer(470);
+  i2c_init();
+  buzzer(570);
+}
+
 void color_read(){
+  #define ERROR 15
   //カラーセンサー読み取り
   int trr,trg,trb,trir,tlr,tlg,tlb,tlir;
   change_i2c_port(1);
@@ -297,14 +431,20 @@ void color_read(){
   Wire.endTransmission();
 
   //通信エラー検知
-  if(trr > 50)rr = trr;
-  if(trg > 50)rg = trg;
-  if(trb > 50)rb = trb;
-  if(trir > 50)rir = trir;
-  if(tlr > 50)lr = tlr;
-  if(tlg > 50)lg = tlg;
-  if(tlb > 50)lb = tlb;
-  if(tlir > 50)lir = tlir;
+  if(trr > ERROR)rr = trr;
+  //else restart_i2c();
+  if(trg > ERROR)rg = trg;
+  //else restart_i2c();
+  if(trb > ERROR)rb = trb;
+  //else restart_i2c();
+  if(tlr > ERROR)lr = tlr;
+  //else restart_i2c();
+  if(tlg > ERROR)lg = tlg;
+  //else restart_i2c();
+  if(tlb > ERROR)lb = tlb;
+  //else restart_i2c();
+  rir = trir;
+  lir = tlir;
 
   //銀検知読み取り
   silver = analogRead(P_SILVER);
@@ -312,34 +452,6 @@ void color_read(){
   tpr_r = analogRead(P_TPR_R);
   tpr_m = analogRead(P_TPR_M);
   tpr_l = analogRead(P_TPR_L);
-}
-
-void bmx_init(){
-  change_i2c_port(2);
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x4B);  // Select Mag register
-  Wire.write(0x83);  // Soft reset
-  Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x4B);  // Select Mag register
-  Wire.write(0x01);  // Soft reset
-  Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x4C);  // Select Mag register
-  Wire.write(0x00);  // Normal Mode, ODR = 10 Hz
-  Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x4E);  // Select Mag register
-  Wire.write(0x84);  // X, Y, Z-Axis enabled
-  Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x51);  // Select Mag register
-  Wire.write(0x04);  // No. of Repetitions for X-Y Axis = 9
-  Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x52);  // Select Mag register
-  Wire.write(0x16);  // No. of Repetitions for Z-Axis = 15
-  Wire.endTransmission();
 }
 
 void bmx_fixer(){
@@ -391,117 +503,26 @@ void servo_write(Bucket mode){
     buzzer(190);
     angle = 0;
     angle = map(angle, 0, 180, SERVO_MIN, SERVO_MAX);
-    pwm.setPWM(0,0,SERVO_MAX);
-    pwm.setPWM(8,0,SERVO_MIN);
+    pwm.setPWM(14,0,SERVO_MAX);
+    pwm.setPWM(15,0,SERVO_MIN);
     delay(1000);
-  }
-  else if(mode == DOWN){
+  }else if(mode == DOWN){
     buzzer(290);
     angle = 180;
     angle = map(angle, 0, 180, SERVO_MIN, SERVO_MAX);
-    pwm.setPWM(0,0,SERVO_MIN);
-    pwm.setPWM(8,0,SERVO_MAX);   
+    pwm.setPWM(14,0,SERVO_MIN);
+    pwm.setPWM(15,0,SERVO_MAX);   
     delay(1000);
-  }/*else if(mode == RELEASE){
-    servo.setPWM(2,0,SERVO_MAX);
+  }else if(mode == RELEASE){
+    pwm.setPWM(2,0,SERVO_MAX);
   }else if(mode == HOLD){
-    servo.setPWM(2,0,SERVO_MIN);
-  }*/
-}
-
-void setup(){
-  /*#ifdef COLOR_DEBUG
-  //ほげー
-  test_sensor_setup();
-  return;
-  #endif*/
-  //ピンセット
-  pinMode(P_TPR_R,INPUT);
-  pinMode(P_TPR_M,INPUT);
-  pinMode(P_TPR_L,INPUT);
-  pinMode(P_SILVER,INPUT);
-  pinMode(P_TPR_B,INPUT);
-  pinMode(P_M_APWM,OUTPUT);
-  pinMode(P_M_A1,OUTPUT);
-  pinMode(P_M_A2,OUTPUT);
-  pinMode(P_M_BPWM,OUTPUT);
-  pinMode(P_M_B1,OUTPUT);
-  pinMode(P_M_B2,OUTPUT);
-  pinMode(P_S_RT,OUTPUT);
-  pinMode(P_S_LT,OUTPUT);
-  pinMode(P_S_RE,INPUT);
-  pinMode(P_S_LE,INPUT);
-  pinMode(P_T_R,INPUT);
-  pinMode(P_T_M,INPUT);
-  pinMode(P_T_L,INPUT);
-  pinMode(P_T_B,INPUT);
-  pinMode(BZ,OUTPUT);
-  // シリアル開始
-  Serial.begin(9600);
-  //サーボ初期化・I2Cスタート
-  Wire.begin();
-  change_i2c_port(3);
-  pwm.begin();
-  pwm.setPWMFreq(50);
-  delay(1000);
-  change_i2c_port(0);
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(CONTROL_MSB);
-  Wire.write(CONTROL_1_LSB);
-  Wire.endTransmission();
-  change_i2c_port(1);
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(CONTROL_MSB);
-  Wire.write(CONTROL_1_LSB);
-  Wire.endTransmission();
-  change_i2c_port(0);
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(CONTROL_MSB);
-  Wire.write(CONTROL_2_LSB);
-  Wire.endTransmission();
-  change_i2c_port(1);
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(CONTROL_MSB);
-  Wire.write(CONTROL_2_LSB);
-  Wire.endTransmission();
-  //地磁気センサーリセット
-  bmx_init();
-  //強制停止割り込み
-  //attachInterrupt(2,interrupt,FALLING);
-}
-
-void motor_write(int right,int left){
-  //right
-  if(right == 0){
-    digitalWrite(P_M_A1,LOW);
-    digitalWrite(P_M_A2,LOW);
-  }else if(right > 0){
-    digitalWrite(P_M_A1,HIGH);
-    digitalWrite(P_M_A2,LOW);
-    analogWrite(P_M_APWM,abs(right));
-  }else{
-    digitalWrite(P_M_A1,LOW);
-    digitalWrite(P_M_A2,HIGH);
-    analogWrite(P_M_APWM,abs(right));
-  }
-  //left
-  if(left == 0){
-    digitalWrite(P_M_B1,LOW);
-    digitalWrite(P_M_B2,LOW);
-  }else if(left > 0){
-    digitalWrite(P_M_B1,HIGH);
-    digitalWrite(P_M_B2,LOW);
-    analogWrite(P_M_BPWM,abs(left));
-  }else{
-    digitalWrite(P_M_B1,LOW);
-    digitalWrite(P_M_B2,HIGH);
-    analogWrite(P_M_BPWM,abs(left));
+    pwm.setPWM(2,0,SERVO_MIN);
   }
 }
 
 void check_voltage(){
   int ahobakashine = analogRead(A0);
-  if(ahobakashine < 580){
+  if(ahobakashine < 560){
     motor_write(0,0);
     while(true){
       buzzer(440);
@@ -511,34 +532,32 @@ void check_voltage(){
 }
 
 void p_trace(){
-  #define GAIN 0.6
-  #define BASE 36
+  #define GAIN 0.7
+  #define BASE 50
   #define MOTOR_MAX 60
   #define MOTOR_MIN -60
   #define GREEN_VALUE 10
-  #define OUTSIDE 6.0
-  #define INSIDE 1.0
-  const int r_target = 425;
-  const int l_target = 480;
+  #define OUTSIDE 0.38
+  const int r_target = 450;
+  const int l_target = 520;
   int r_v = (rr + rg + rb) / 3 - r_target;
   int l_v = (lr + lg + lb) / 3 - l_target;
   int val = r_v - l_v;
   val *= GAIN;
-  int rm = BASE + INSIDE * val;
-  int lm = BASE - INSIDE * val;
+  int rm = BASE + val;
+  int lm = BASE - val;
   int out_val = tpr_l - tpr_r;
   out_val *= OUTSIDE;
   rm += out_val;
-  rm -= out_val;
+  lm -= out_val;
   if(rm > MOTOR_MAX)rm = MOTOR_MAX;
   if(lm > MOTOR_MAX)lm = MOTOR_MAX;
   if(rm < MOTOR_MIN)rm = MOTOR_MIN;
   if(lm < MOTOR_MIN)lm = MOTOR_MIN;
   motor_write(rm,lm);
-  //Serial.println(val);
-  /*Serial.print(r_v);
+  Serial.print(rm);
   Serial.print(",");
-  Serial.println(l_v);*/
+  Serial.println(out_val);
 }
 
 int tan2angle(int x,int y){
@@ -865,6 +884,7 @@ void looking_corner(){
             delay(500);
             motor_write(0,0);
             state = TRACE;
+            rotate(-45,0);
             return;
           }else if(isSilver){
             //銀なので間違い
@@ -887,17 +907,56 @@ void looking_corner(){
   }
 }
 
-void p_trace_v3(){
-  #define INSIDE 1
-  #define OUTSIDE 20
-  int r_value =INSIDE * (rr + rg + rb) / 40;
-  int l_value =INSIDE * (lr + lg + lb) / 40;
-  int dif = r_value - l_value;
-  Serial.println(dif);
-  int rm = 48 * (50 - abs(dif)) / 25 + dif;
-  int lm = 48 * (50 - abs(dif)) / 25 - dif;
-  if(rm > 112) rm = 112;
-  motor_write(rm,lm);
+void famima(){
+  int d;
+  d=40;
+  oto(Fs,7*d,d);
+  oto(D,7*d,d);
+  oto(A,7*d,d);
+  oto(D,7*d,d);
+  oto(E,7*d,d);
+  oto(hiA,7*d,8*d);
+  oto(A,7*d,d);
+  oto(E,7*d,d);
+  oto(Fs,7*d,d);
+  oto(E,7*d,d);
+  oto(A,7*d,d);
+  oto(D,7*d,d);
+}
+
+void nakamura_is_senpan(){
+  motor_write(48,48);
+  while(true){
+    color_read();
+    judge_color();
+    if(digitalRead(P_T_M) == HIGH){
+      motor_write(0,0);
+      delay(250);
+      rotate(90,0);
+      motor_write(48,48);
+    }
+    if(Line_Sensor[1] != WHITE || Line_Sensor[3] != WHITE || isSilver){
+      if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
+        motor_write(0,0);
+        famima();
+        motor_write(48,48);
+        delay(500);
+        motor_write(0,0);
+        state = TRACE;
+        return;
+      }else if(silver){
+        isSilver = false;
+        motor_write(0,0);
+        buzzer(1000);
+        motor_write(-48,-48);
+        delay(BACK_LINE);
+        motor_write(0,0);
+        //右に回転
+        rotate(90,0);
+        motor_write(48,48);
+      }
+    }
+  }
 }
 
 bool check_color_match(){
@@ -938,23 +997,6 @@ void p_trace_v2(){
   if(operation > 192) operation = 192;
   else if(operation < -192) operation = -192;
   motor_write(128 + operation /2,128 - operation / 2);
-}
-
-void famima(){
-  int d;
-  d=40;
-  oto(Fs,7*d,d);
-  oto(D,7*d,d);
-  oto(A,7*d,d);
-  oto(D,7*d,d);
-  oto(E,7*d,d);
-  oto(hiA,7*d,8*d);
-  oto(A,7*d,d);
-  oto(E,7*d,d);
-  oto(Fs,7*d,d);
-  oto(E,7*d,d);
-  oto(A,7*d,d);
-  oto(D,7*d,d);
 }
 
 void saua(){
@@ -1077,6 +1119,12 @@ void saua(){
 }
 
 void test_sensor_loop(){
+  /*color_read();
+  Serial.print((rr + rg + rb) / 3);
+  Serial.print(",");
+  Serial.println((lr + lg + lb) / 3);
+  //Serial.println(silver);
+  return;
   //motor_write(72,0);
   /*servo_write(RAISE);
   delay(2000);
@@ -1089,9 +1137,9 @@ void test_sensor_loop(){
   //servo_write(RAISE);
   //servo_write(DOWN);*/
   color_read();
-  judge_color();/*
-  Serial.println(silver);*/
-  Serial.print(rr);
+  judge_color();
+  Serial.println(silver);
+  /*Serial.print(rr);
   Serial.print(",");
   Serial.print(rg);
   Serial.print(",");
@@ -1123,6 +1171,46 @@ void test_sensor_loop(){
   p_trace();
   check_color();*/
   //Serial.println(sonic_sensor_right());
+}
+
+bool isLine(){
+  if(Line_Sensor[0] != WHITE || Line_Sensor[1] != WHITE || Line_Sensor[2] != WHITE
+    || Line_Sensor[3] != WHITE || Line_Sensor[4] != WHITE){
+    return true;
+  }else{
+    return false;
+  }
+}
+
+void gap(){
+  #define TIMETIME 1000
+  #define ROTATION 1000
+  tone(BZ,550);
+  while(true){
+    motor_write(48,48);
+    long nt = millis();
+    while(millis() - nt < TIMETIME){
+      color_read();
+      judge_color();
+      if(isLine()){
+          buzzer(1000);
+          return;
+        }
+    }
+    motor_write(0,0);
+    delay(250);
+    rotate(-45,1);
+    if(isLine()){
+      buzzer(1000);
+      return;
+    }
+    rotate(90,1);
+    if(isLine()){
+      buzzer(1000);
+      return;
+    }
+    rotate(-45,1);
+  }
 }
 
 void loop() {
@@ -1176,8 +1264,56 @@ void loop() {
     //特殊処理発生かどうか知りたい
     if((Line_Sensor[1] == WHITE || Line_Sensor[1] == BLACK) 
         && (Line_Sensor[3] == WHITE || Line_Sensor[3] == BLACK)){
-      if(Line_Sensor[1] == WHITE && Line_Sensor[3] == WHITE){
+      if(Line_Sensor[0] == WHITE && Line_Sensor[1] == WHITE && Line_Sensor[2] == WHITE
+        && Line_Sensor[3] == WHITE && Line_Sensor[4] == WHITE
+      ){
         motor_write(48,48);
+        if(Previous_Line_Sensor[0] != WHITE || Previous_Line_Sensor[1] != WHITE || Previous_Line_Sensor[2] != WHITE
+          || Previous_Line_Sensor[3] != WHITE || Previous_Line_Sensor[4] != WHITE){
+            //はじめての　しろぉ
+            white_time = millis();
+          }else{
+            if(millis() - white_time > 3500){
+              motor_write(0,0);
+              buzzer(1000);
+              long hoge;
+              #define ROTATION 1000
+              motor_write(48,-48);
+              hoge = millis();
+              while(millis() - hoge < ROTATION){
+                color_read();
+                judge_color();
+                if(isLine()){
+                  motor_write(0,0);
+                  white_time = millis();
+                  return;
+                }
+              }
+              motor_write(-48,48);
+              hoge = millis();
+              while(millis() - hoge < ROTATION * 2){
+                color_read();
+                judge_color();
+                if(isLine()){
+                  motor_write(0,0);
+                  white_time = millis();
+                  return;
+                }
+              }
+              motor_write(48,-48);
+              hoge = millis();
+              while(millis() - hoge < ROTATION){
+                color_read();
+                judge_color();
+                if(isLine()){
+                  motor_write(0,0);
+                  white_time = millis();
+                  return;
+                }
+              }
+              white_time = millis();
+            }
+          }
       }else{
         p_trace();
       }
