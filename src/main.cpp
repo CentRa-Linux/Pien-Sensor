@@ -554,7 +554,7 @@ void servo_write(Bucket mode){
 
 void check_voltage(){
   int ahobakashine = analogRead(A11);
-  if(ahobakashine < 560){
+  if(ahobakashine < 510){
     motor_write(0,0);
     while(true){
       Serial.println("Battery is LOW");
@@ -566,12 +566,12 @@ void check_voltage(){
 
 void p_trace(){
   #define INSIDE 0.7
-  #define BASE 50
+  #define BASE 54
   #define MOTOR_MAX 60
   #define MOTOR_MIN -60
   #define GREEN_VALUE 10
   #define OUTSIDE 0.38
-  #define GAIN 1.2
+  #define GAIN 1.0
   const int r_target = 450;
   const int l_target = 520;
   int r_v = (rr + rg + rb) / 3 - r_target;
@@ -1215,7 +1215,7 @@ void saua(){
   oto(hiD,12*d,0);
 }
 
-void test_sensor_loop(){
+void test_sensor_loop(){/*
   float r = sonic_sensor_right();
   float l = sonic_sensor_left();
   while(true){
@@ -1237,14 +1237,14 @@ void test_sensor_loop(){
   rotate(-90);
   delay(2000);
   //servo_write(RAISE);
-  //servo_write(DOWN);*/
+  //servo_write(DOWN);*//*
   Serial.print(sonic_sensor_right());
   Serial.print(",");
   Serial.println(sonic_sensor_left());
-  return;/*
+  return;*/
   color_read();
   judge_color();
-  Serial.println(tpr_m);
+  Serial.println(silver);
   /*Serial.print(rr);
   Serial.print(",");
   Serial.print(rg);
