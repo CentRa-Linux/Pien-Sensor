@@ -47,19 +47,19 @@
 #define P_SILVER A15
 #define P_TPR_B A11
 #define P_M_APWM 4
-#define P_M_A1 2
-#define P_M_A2 3
+#define P_M_A1 3
+#define P_M_A2 2
 #define P_M_BPWM 5
-#define P_M_B1 7
-#define P_M_B2 6
+#define P_M_B1 6
+#define P_M_B2 7
 #define P_S_RT 53
 #define P_S_LT 47
 #define P_S_RE 51
 #define P_S_LE 49
-#define P_T_R 50
+#define P_T_R 46
 #define P_T_M 52
-#define P_T_L 48
-#define P_T_B 44
+#define P_T_L 50
+#define P_T_B 48
 #define BZ 9
 
 //アドレス指定
@@ -100,8 +100,8 @@ enum State{TRACE,RESCUE,CORNER,SENPAN};
 int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r,xMag,yMag,zMag,count = 0;
 
 //bmxのオフセット
-const int bmx_x_os = 15;
-const int bmx_y_os = 35;
+const int bmx_x_os = 12;
+const int bmx_y_os = 19;
 
 //右から左へ
 Color Line_Sensor[5];
@@ -152,9 +152,91 @@ void buzzer(int frq){
   noTone(BZ);
 }
 
-void interrupt(){
-  tone(BZ,700);
-  while(true);
+void motor_write(int right,int left){
+  //right
+  if(right == 0){
+    digitalWrite(P_M_A1,LOW);
+    digitalWrite(P_M_A2,LOW);
+  }else if(right > 0){
+    digitalWrite(P_M_A1,HIGH);
+    digitalWrite(P_M_A2,LOW);
+    analogWrite(P_M_APWM,abs(right));
+  }else{
+    digitalWrite(P_M_A1,LOW);
+    digitalWrite(P_M_A2,HIGH);
+    analogWrite(P_M_APWM,abs(right));
+  }
+  //left
+  if(left == 0){
+    digitalWrite(P_M_B1,LOW);
+    digitalWrite(P_M_B2,LOW);
+  }else if(left > 0){
+    digitalWrite(P_M_B1,HIGH);
+    digitalWrite(P_M_B2,LOW);
+    analogWrite(P_M_BPWM,abs(left));
+  }else{
+    digitalWrite(P_M_B1,LOW);
+    digitalWrite(P_M_B2,HIGH);
+    analogWrite(P_M_BPWM,abs(left));
+  }
+}
+
+void bmx_init(){
+  change_i2c_port(2);
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x4B);  // Select Mag register
+  Wire.write(0x83);  // Soft reset
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x4B);  // Select Mag register
+  Wire.write(0x01);  // Soft reset
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x4C);  // Select Mag register
+  Wire.write(0x00);  // Normal Mode, ODR = 10 Hz
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x4E);  // Select Mag register
+  Wire.write(0x84);  // X, Y, Z-Axis enabled
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x51);  // Select Mag register
+  Wire.write(0x04);  // No. of Repetitions for X-Y Axis = 9
+  Wire.endTransmission();
+  Wire.beginTransmission(BMX_MAG);
+  Wire.write(0x52);  // Select Mag register
+  Wire.write(0x16);  // No. of Repetitions for Z-Axis = 15
+  Wire.endTransmission();
+}
+
+void i2c_init(){
+  Wire.begin();
+  change_i2c_port(3);
+  pwm.begin();
+  pwm.setPWMFreq(50);
+  delay(1000);
+  change_i2c_port(0);
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(CONTROL_MSB);
+  Wire.write(CONTROL_1_LSB);
+  Wire.endTransmission();
+  change_i2c_port(1);
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(CONTROL_MSB);
+  Wire.write(CONTROL_1_LSB);
+  Wire.endTransmission();
+  change_i2c_port(0);
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(CONTROL_MSB);
+  Wire.write(CONTROL_2_LSB);
+  Wire.endTransmission();
+  change_i2c_port(1);
+  Wire.beginTransmission(S11059_ADDR);
+  Wire.write(CONTROL_MSB);
+  Wire.write(CONTROL_2_LSB);
+  Wire.endTransmission();
+  //地磁気センサーリセット
+  bmx_init();
 }
 
 void judge_color(){
@@ -167,10 +249,10 @@ void judge_color(){
   #define LB_BORDER 200
   #define LIR_BORDER 200
   #define R_TPR_BORDER 450
-  #define M_TPR_BORDER 28
+  #define M_TPR_BORDER 29
   #define L_TPR_BORDER 450
   #define B_TPR_BORDER 100
-  #define SILVER_BORDER 600
+  #define SILVER_BORDER 300
   #define R_GpR_MIN 1.0
   #define R_GpR_MAX 1.7
   #define L_GpR_MIN 1.0
@@ -243,67 +325,12 @@ void judge_color(){
     Line_Sensor[4] = WHITE;
   }
   //silver
+  /*if((rr > 1500 && rg > 1500) || (lr > 1500 && lg > 1500)){
+    isSilver = true;
+  }*/
   if(silver < SILVER_BORDER){
     isSilver = true;
   }
-}
-
-void bmx_init(){
-  change_i2c_port(2);
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x4B);  // Select Mag register
-  Wire.write(0x83);  // Soft reset
-  Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x4B);  // Select Mag register
-  Wire.write(0x01);  // Soft reset
-  Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x4C);  // Select Mag register
-  Wire.write(0x00);  // Normal Mode, ODR = 10 Hz
-  Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x4E);  // Select Mag register
-  Wire.write(0x84);  // X, Y, Z-Axis enabled
-  Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x51);  // Select Mag register
-  Wire.write(0x04);  // No. of Repetitions for X-Y Axis = 9
-  Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x52);  // Select Mag register
-  Wire.write(0x16);  // No. of Repetitions for Z-Axis = 15
-  Wire.endTransmission();
-}
-
-void i2c_init(){
-  Wire.begin();
-  change_i2c_port(3);
-  pwm.begin();
-  pwm.setPWMFreq(50);
-  delay(1000);
-  change_i2c_port(0);
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(CONTROL_MSB);
-  Wire.write(CONTROL_1_LSB);
-  Wire.endTransmission();
-  change_i2c_port(1);
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(CONTROL_MSB);
-  Wire.write(CONTROL_1_LSB);
-  Wire.endTransmission();
-  change_i2c_port(0);
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(CONTROL_MSB);
-  Wire.write(CONTROL_2_LSB);
-  Wire.endTransmission();
-  change_i2c_port(1);
-  Wire.beginTransmission(S11059_ADDR);
-  Wire.write(CONTROL_MSB);
-  Wire.write(CONTROL_2_LSB);
-  Wire.endTransmission();
-  //地磁気センサーリセット
-  bmx_init();
 }
 
 void setup(){
@@ -337,37 +364,6 @@ void setup(){
   Serial.begin(9600);
   //サーボ初期化・I2Cスタート
   i2c_init();
-  //強制停止割り込み
-  //attachInterrupt(2,interrupt,FALLING);
-}
-
-void motor_write(int right,int left){
-  //right
-  if(right == 0){
-    digitalWrite(P_M_A1,LOW);
-    digitalWrite(P_M_A2,LOW);
-  }else if(right > 0){
-    digitalWrite(P_M_A1,HIGH);
-    digitalWrite(P_M_A2,LOW);
-    analogWrite(P_M_APWM,abs(right));
-  }else{
-    digitalWrite(P_M_A1,LOW);
-    digitalWrite(P_M_A2,HIGH);
-    analogWrite(P_M_APWM,abs(right));
-  }
-  //left
-  if(left == 0){
-    digitalWrite(P_M_B1,LOW);
-    digitalWrite(P_M_B2,LOW);
-  }else if(left > 0){
-    digitalWrite(P_M_B1,HIGH);
-    digitalWrite(P_M_B2,LOW);
-    analogWrite(P_M_BPWM,abs(left));
-  }else{
-    digitalWrite(P_M_B1,LOW);
-    digitalWrite(P_M_B2,HIGH);
-    analogWrite(P_M_BPWM,abs(left));
-  }
 }
 
 void restart_i2c(){
@@ -536,24 +532,25 @@ void check_voltage(){
 }
 
 void p_trace(){
-  #define GAIN 0.7
+  #define INSIDE 0.7
   #define BASE 50
   #define MOTOR_MAX 60
   #define MOTOR_MIN -60
   #define GREEN_VALUE 10
   #define OUTSIDE 0.38
+  #define GAIN 1.2
   const int r_target = 450;
   const int l_target = 520;
   int r_v = (rr + rg + rb) / 3 - r_target;
   int l_v = (lr + lg + lb) / 3 - l_target;
-  int val = r_v - l_v;
-  val *= GAIN;
-  int rm = BASE + val;
-  int lm = BASE - val;
+  int in_val = r_v - l_v;
+  in_val *= INSIDE;
   int out_val = tpr_l - tpr_r;
   out_val *= OUTSIDE;
-  rm += out_val;
-  lm -= out_val;
+  int ctrl = in_val + out_val;
+  ctrl *= GAIN;
+  int rm = BASE + ctrl;
+  int lm = BASE - ctrl;
   if(rm > MOTOR_MAX)rm = MOTOR_MAX;
   if(lm > MOTOR_MAX)lm = MOTOR_MAX;
   if(rm < MOTOR_MIN)rm = MOTOR_MIN;
@@ -758,6 +755,24 @@ float sonic_sensor_left(){
   return dis;
 }
 
+void go_straight(float r_base,float l_base){
+  #define VOL 36
+  #define BAKA 72
+  #define DIF 2.0
+  float hoge;
+  hoge = sonic_sensor_right();
+  if(hoge > 500.0){
+    motor_write(BAKA,BAKA);
+  }else if(hoge > r_base + DIF){
+    motor_write(60 - VOL,60 + VOL);
+  }else if(hoge < r_base){
+    motor_write(60 + VOL,60 - VOL);
+  }else{
+    motor_write(BAKA,BAKA);
+  }
+  Serial.println(hoge);
+}
+
 void avoid_object(){
   #define GAIN 5
   #define VEHCLE 18.0
@@ -813,9 +828,12 @@ void looking_corner(){
   //三角コーナーコード
   servo_write(DOWN);
   motor_write(48,48);
+  float r_ori,l_ori;
+  r_ori = sonic_sensor_right();
+  l_ori = sonic_sensor_left();
   while(digitalRead(P_T_M) == LOW/*digitalRead(P_T_R) == LOW && digitalRead(P_T_L) == LOW*/){
     //まっすぐ進む
-    motor_write(48,48);
+    go_straight(r_ori,l_ori);
     color_read();
     judge_color();
     if(Line_Sensor[1] != WHITE || Line_Sensor[3] != WHITE || isSilver){
@@ -901,13 +919,66 @@ void done_escape(){
   state = TRACE;
 }
 
+bool isEvent(){
+  if(Line_Sensor[1] == WHITE && Line_Sensor[3] == WHITE && !isSilver
+    && digitalRead(P_T_M) == HIGH){
+      return false;
+    }else{
+      return true;
+    }
+}
+
 void nakamura_is_senpan(){
   //基本は時計回りだよ
   //穴を見つけたら行ってみてダメなら180度ターン
-  motor_write(48,48);
+  float r_ori,l_ori;
+  r_ori = sonic_sensor_right();
+  l_ori = sonic_sensor_left();
   while(true){
     color_read();
     judge_color();
+    go_straight(r_ori,l_ori);
+    if(isEvent()){
+      motor_write(0,0);
+      if(digitalRead(P_T_M) == LOW){
+        //タッチセンサー反応処理
+        if(sonic_sensor_right() > ROTATE_BORDER && sonic_sensor_left() < ROTATE_BORDER){
+          rotate(90,0);
+          r_ori = sonic_sensor_right();
+          l_ori = sonic_sensor_left();
+        }else if(sonic_sensor_left() > ROTATE_BORDER && sonic_sensor_right() > ROTATE_BORDER){
+          rotate(-90,0);
+          color_read();
+          judge_color();
+          r_ori = sonic_sensor_right();
+          l_ori = sonic_sensor_left();
+          while(!isEvent){
+            go_straight(r_ori,l_ori);
+            color_read();
+            judge_color();
+          }
+          motor_write(0,0);
+          if(isSilver){
+            done_escape();
+          }else{
+            rotate(180,0);
+            r_ori = sonic_sensor_right();
+            l_ori = sonic_sensor_left();
+          }
+        }
+      }else{
+        if(isSilver){
+          done_escape();
+        }else{
+          motor_write(-48,-48);
+          delay(BACK_LINE);
+          motor_write(0,0);
+          rotate(90,0);
+          r_ori = sonic_sensor_right();
+          l_ori = sonic_sensor_left();
+        }
+      }
+    }
     if(digitalRead(P_T_M) == HIGH){
       motor_write(0,0);
       if(sonic_sensor_right() > ROTATE_BORDER && sonic_sensor_left() < ROTATE_BORDER){
@@ -947,7 +1018,6 @@ void nakamura_is_senpan(){
         motor_write(0,0);
         //右に回転
         rotate(90,0);
-        motor_write(48,48);
       }
     }
   }
@@ -1113,6 +1183,11 @@ void saua(){
 }
 
 void test_sensor_loop(){
+  float r = sonic_sensor_right();
+  float l = sonic_sensor_left();
+  while(true){
+    go_straight(r,l);
+  }
   /*color_read();
   Serial.print((rr + rg + rb) / 3);
   Serial.print(",");
@@ -1133,10 +1208,10 @@ void test_sensor_loop(){
   Serial.print(sonic_sensor_right());
   Serial.print(",");
   Serial.println(sonic_sensor_left());
-  return;
+  return;/*
   color_read();
   judge_color();
-  Serial.println(silver);
+  Serial.println(tpr_m);
   /*Serial.print(rr);
   Serial.print(",");
   Serial.print(rg);
@@ -1156,9 +1231,9 @@ void test_sensor_loop(){
     Serial.print(Line_Sensor[i]);
     Serial.print(",");
   }
-  Serial.println("");
-  //check_bmx();
-  /*bmx_read();
+  Serial.println("");*//*
+  check_bmx();
+  bmx_read();
   Serial.print(xMag);
   Serial.print(",");
   Serial.print(yMag);
@@ -1247,7 +1322,7 @@ void loop() {
     if(isSilver){
       motor_write(0,0);
       isSilver = false;
-      state = RESCUE;
+      state = SENPAN;
       Serial.println("SILVER DETECTED");
       famima();
       motor_write(48,48);
@@ -1352,14 +1427,15 @@ void loop() {
     float r_onigiri,l_onigiri;
     r_onigiri = sonic_sensor_right();
     l_onigiri = sonic_sensor_left();
-    while(/*digitalRead(P_T_R) == HIGH && digitalRead(P_T_L) == HIGH*/digitalRead(P_T_M) == HIGH
-    && Line_Sensor[1] == WHITE && Line_Sensor[3] == WHITE){
+    while(/*digitalRead(P_T_R) == HIGH && digitalRead(P_T_L) == HIGH*/digitalRead(P_T_M) == LOW
+    && Line_Sensor[1] != GREEN && Line_Sensor[3] != GREEN && !isSilver){
       color_read();
       judge_color();
-      motor_write(36,36);
+      go_straight(r_onigiri,l_onigiri);
     }
     motor_write(0,0);
-    if(Line_Sensor[1] != WHITE || Line_Sensor[3] != WHITE){
+    if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN || isSilver){
+      isSilver = false;
       Serial.println("Other Line Detected");
       buzzer(1500);
       motor_write(-48,-48);
