@@ -68,7 +68,10 @@
 #define CONTROL_1_LSB 0x89
 #define CONTROL_2_LSB 0x09
 #define SENSOR_REGISTER 0x03
-#define BMX_MAG 0x13
+#define Addr_Accl 0x19
+#define Addr_Gyro 0x69
+#define Addr_Mag 0x13
+#define ADDR_MAG 0x13
 #define PCA9685_ADDR 0x40
 
 //debug
@@ -183,29 +186,59 @@ void motor_write(int right,int left){
 
 void bmx_init(){
   change_i2c_port(2);
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x4B);  // Select Mag register
-  Wire.write(0x83);  // Soft reset
+  Wire.beginTransmission(Addr_Accl);
+  Wire.write(0x0F);
+  Wire.write(0x03);
   Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x4B);  // Select Mag register
-  Wire.write(0x01);  // Soft reset
+
+  Wire.beginTransmission(Addr_Accl);
+  Wire.write(0x10);
+  Wire.write(0x08);
   Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x4C);  // Select Mag register
-  Wire.write(0x00);  // Normal Mode, ODR = 10 Hz
+
+  Wire.beginTransmission(Addr_Accl);
+  Wire.write(0x11);
+  Wire.write(0x00);
   Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x4E);  // Select Mag register
-  Wire.write(0x84);  // X, Y, Z-Axis enabled
+
+  Wire.beginTransmission(Addr_Gyro);
+  Wire.write(0x0F);
+  Wire.write(0x04);
   Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x51);  // Select Mag register
-  Wire.write(0x04);  // No. of Repetitions for X-Y Axis = 9
+
+  Wire.beginTransmission(Addr_Gyro);
+  Wire.write(0x10);
+  Wire.write(0x07);
   Wire.endTransmission();
-  Wire.beginTransmission(BMX_MAG);
-  Wire.write(0x52);  // Select Mag register
-  Wire.write(0x16);  // No. of Repetitions for Z-Axis = 15
+  
+  Wire.beginTransmission(Addr_Gyro);
+  Wire.write(0x11);
+  Wire.write(0x00);
+  Wire.endTransmission();
+
+  Wire.beginTransmission(Addr_Mag);
+  Wire.write(0x4B);
+  Wire.write(0x83);
+  Wire.endTransmission();
+  
+  Wire.beginTransmission(Addr_Mag);
+  Wire.write(0x4B);
+  Wire.write(0x01);
+  Wire.endTransmission();
+
+  Wire.beginTransmission(Addr_Mag);
+  Wire.write(0x4C);
+  Wire.write(0x00);
+  Wire.endTransmission();
+
+  Wire.beginTransmission(Addr_Mag);
+  Wire.write(0x4E);
+  Wire.write(0x84);
+  Wire.endTransmission();
+
+  Wire.beginTransmission(Addr_Mag);
+  Wire.write(0x51);
+  Wire.write(0x04);
   Wire.endTransmission();
 }
 
@@ -464,10 +497,10 @@ void bmx_read(){
   change_i2c_port(2);
   unsigned int data[8];
   for(int i = 0;i < 8;i++){
-    Wire.beginTransmission(BMX_MAG);
+    Wire.beginTransmission(Addr_Mag);
     Wire.write(0x42 + i);
     Wire.endTransmission();
-    Wire.requestFrom(BMX_MAG,1);
+    Wire.requestFrom(Addr_Mag,1);
     if(Wire.available() == 1){
       data[i] = Wire.read();
     }
