@@ -272,7 +272,7 @@ void i2c_init(){
   bmx_init();
 }
 
-void judge_color(){
+/*void judge_color(){
   #define RR_BORDER 250
   #define RG_BORDER 290
   #define RB_BORDER 260
@@ -338,6 +338,94 @@ void judge_color(){
     }else{
       Line_Sensor[3] = BLACK;
     }
+  }
+  //TPR-r
+  if(tpr_r > R_TPR_BORDER){
+    Line_Sensor[0] = BLACK;
+  }else{
+    Line_Sensor[0] = WHITE;
+  }
+  //TPR-m
+  if(tpr_m > M_TPR_BORDER){
+    Line_Sensor[2] = BLACK;
+  }else{
+    Line_Sensor[2] = WHITE;
+  }
+  //TPR-l
+  if(tpr_l > L_TPR_BORDER){
+    Line_Sensor[4] = BLACK;
+  }else{
+    Line_Sensor[4] = WHITE;
+  }
+  //silver
+  /*if((rr > 1500 && rg > 1500) || (lr > 1500 && lg > 1500)){
+    isSilver = true;
+  }*//*
+  if(silver < SILVER_BORDER){
+    isSilver = true;
+  }
+}*/
+
+void judge_color(){
+  //こっちは比を取る方
+  #define RR_BORDER 250
+  #define RG_BORDER 290
+  #define RB_BORDER 260
+  #define RIR_BORDER 200
+  #define LR_BORDER 268
+  #define LG_BORDER 340
+  #define LB_BORDER 200
+  #define LIR_BORDER 200
+  #define R_TPR_BORDER 450
+  #define M_TPR_BORDER 29
+  #define L_TPR_BORDER 450
+  #define B_TPR_BORDER 100
+  #define SILVER_BORDER 300
+  #define R_GpR_MIN 1.0
+  #define R_GpR_MAX 1.7
+  #define L_GpR_MIN 1.0
+  #define L_GpR_MAX 1.7
+
+  //前回の値を移動
+  for(int i = 0;i < 5;i++) Previous_Line_Sensor[i] = Line_Sensor[i];
+  //I2C Color Sensor
+  //right
+  float right_ratio = rg / rr;
+  if(right_ratio > R_GpR_MIN && right_ratio < R_GpR_MAX){
+    //白or黒
+    if(rr < RR_BORDER && rg < RG_BORDER){
+      //黒
+      Line_Sensor[1] = BLACK;
+    }else{
+      //白
+      Line_Sensor[1] = WHITE;
+    }
+  }else if(right_ratio > R_GpR_MAX){
+    //緑
+    Line_Sensor[1] = GREEN;
+  }
+  else if(right_ratio < R_GpR_MIN){
+    //赤
+    Line_Sensor[1] = RED;
+  }
+  //left
+  float left_ratio = lg / lr;
+  if(left_ratio > L_GpR_MIN && left_ratio < L_GpR_MAX){
+    //白or黒
+    if(lr < LR_BORDER && lg < LG_BORDER){
+      //黒
+      Line_Sensor[3] = BLACK;
+    }else{
+      //白
+      Line_Sensor[3] = WHITE;
+    }
+  }else if(left_ratio > L_GpR_MAX){
+    //緑
+    Line_Sensor[3] = GREEN;
+  }
+  else if(left_ratio < L_GpR_MIN){
+    //赤
+    Line_Sensor[3] = RED;
   }
   //TPR-r
   if(tpr_r > R_TPR_BORDER){
@@ -564,14 +652,13 @@ void check_voltage(){
   }
 }
 
-void p_trace(){
+void p_trace(float GAIN){
   #define INSIDE 0.7
   #define BASE 54
   #define MOTOR_MAX 60
   #define MOTOR_MIN -60
   #define GREEN_VALUE 10
   #define OUTSIDE 0.38
-  #define GAIN 1.0
   const int r_target = 450;
   const int l_target = 520;
   int r_v = (rr + rg + rb) / 3 - r_target;
@@ -702,7 +789,7 @@ void detect_green(){
   while(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
     color_read();
     judge_color();
-    p_trace();
+    p_trace(1.0);
     if(Line_Sensor[1] == GREEN)isRightGreen = true;
     if(Line_Sensor[3] == GREEN)isLeftGreen = true;
   Serial.print(isRightGreen);
@@ -1274,7 +1361,7 @@ void test_sensor_loop(){/*
   Serial.println(atan2(yMag,xMag) * 180 / PI);//*/
   /*color_read();
   judge_color();
-  p_trace();
+  p_trace(1.0);
   check_color();*/
   //Serial.println(sonic_sensor_right());
 }
@@ -1288,35 +1375,8 @@ bool isLine(){
   }
 }
 
-void gap(){
-  #define TIMETIME 1000
-  #define ROTATION 1000
-  tone(BZ,550);
-  while(true){
-    motor_write(48,48);
-    long nt = millis();
-    while(millis() - nt < TIMETIME){
-      color_read();
-      judge_color();
-      if(isLine()){
-          buzzer(1000);
-          return;
-        }
-    }
-    motor_write(0,0);
-    delay(250);
-    rotate(-45,1);
-    if(isLine()){
-      buzzer(1000);
-      return;
-    }
-    rotate(90,1);
-    if(isLine()){
-      buzzer(1000);
-      return;
-    }
-    rotate(-45,1);
-  }
+bool isSlope(){
+  return false;
 }
 
 void loop() {
@@ -1368,8 +1428,10 @@ void loop() {
       return;
     }
     //特殊処理発生かどうか知りたい
-    if((Line_Sensor[1] == WHITE || Line_Sensor[1] == BLACK) 
-        && (Line_Sensor[3] == WHITE || Line_Sensor[3] == BLACK)){
+    if(isSlope){
+      p_trace(0.6);
+    }else if((Line_Sensor[1] == WHITE || Line_Sensor[1] == BLACK) 
+          && (Line_Sensor[3] == WHITE || Line_Sensor[3] == BLACK)){
       if(Line_Sensor[0] == WHITE && Line_Sensor[1] == WHITE && Line_Sensor[2] == WHITE
         && Line_Sensor[3] == WHITE && Line_Sensor[4] == WHITE
       ){
@@ -1421,7 +1483,7 @@ void loop() {
             }
           }
       }else{
-        p_trace();
+        p_trace(1.0);
       }
     }else if(Line_Sensor[1] == RED || Line_Sensor[3] == RED){
       //赤処理
