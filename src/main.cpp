@@ -82,7 +82,7 @@
 #define SERVO_MAX 480
 
 //三角コーナー探すモードかどうか
-#define CORNER_BORDER 10.0
+#define CORNER_BORDER 4.0
 
 //救助コーナーで曲がるほう
 #define ROTATE_BORDER 20.0
@@ -115,7 +115,7 @@ Color Line_Sensor[5];
 Color Previous_Line_Sensor[5];
 
 //走行モード切替
-State state = SENPAN;
+State state = TRACE;
 
 //壁の向き
 Rescue_Wall Side;
@@ -963,6 +963,33 @@ void go_straight(float r_base,float l_base){
   }
 }
 
+void back_straight(float r_base,float l_base){
+  #define VOL 24
+  #define BAKA 60
+  #define DIF 2.0
+  float right,left;
+  right = sonic_sensor_right();
+  left = sonic_sensor_left();
+  if(right > left){
+    //左の値を採用
+    if(left > l_base + DIF){
+      motor_write(BAKA + VOL,BAKA - VOL);
+    }else if(left < l_base){
+      motor_write(BAKA - VOL,BAKA + VOL);
+    }else{
+      motor_write(BAKA,BAKA);
+    }
+  }else if(left > right){
+    if(right > r_base + DIF){
+      motor_write(BAKA - VOL,BAKA + VOL);
+    }else if(right < r_base){
+      motor_write(BAKA + VOL,BAKA - VOL);
+    }else{
+      motor_write(BAKA,BAKA);
+    }
+  }
+}
+
 void avoid_object(){
   #define GAIN 5
   #define VEHCLE 18.0
@@ -1682,8 +1709,11 @@ void loop() {
     }
     
     delay(500);
-    motor_write(-36,-36);
-    while(digitalRead(P_T_B) == LOW);
+    r_onigiri = sonic_sensor_right();
+    l_onigiri = sonic_sensor_left();
+    /*while(digitalRead(P_T_B) == LOW){
+      back_straight(r_onigiri,l_onigiri);
+    }*/
     motor_write(0,0);
     count++;
   }else if(state == CORNER){
