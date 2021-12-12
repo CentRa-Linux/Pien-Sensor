@@ -840,6 +840,14 @@ void rotate(int angle,int mode){
   Serial.println("I've done it!");
 }
 
+void rotate_abs(int original_angle){
+  bmx_maguro();
+  //original_angle:-180 ~ 180
+  //now_angle:-180 ~ 180
+  int now_angle = tan2angle(xMag,yMag);
+  rotate(original_angle - now_angle,0);
+}
+
 void detect_green(){
   #define STRAIGHT 400
   #define GREEN_TIME 250
@@ -1566,7 +1574,14 @@ void loop() {
               buzzer(1000);
               long hoge;
               #define ROTATION 1000
-              motor_write(64,-64);
+              #define GAP_ROTATE 48
+              #define GOGOGO 1000
+              #define GAP_GONE 48
+              //とりあえず向きを保持
+              bmx_maguro();
+              int this_angle = tan2angle(xMag,yMag);
+              //左回転
+              motor_write(GAP_ROTATE,-GAP_ROTATE);
               hoge = millis();
               while(millis() - hoge < ROTATION){
                 color_read();
@@ -1577,9 +1592,10 @@ void loop() {
                   return;
                 }
               }
-              motor_write(-64,64);
+              //直進
+              motor_write(GAP_GONE,GAP_GONE);
               hoge = millis();
-              while(millis() - hoge < ROTATION * 2){
+              while(millis() - hoge < GOGOGO){
                 color_read();
                 judge_color();
                 if(isLine()){
@@ -1588,7 +1604,12 @@ void loop() {
                   return;
                 }
               }
-              motor_write(64,-64);
+              motor_write(-GAP_GONE,-GAP_GONE);
+              hoge = millis();
+              while(millis() - hoge < GOGOGO);
+              //右回転
+              rotate_abs(this_angle);
+              motor_write(-GAP_ROTATE,GAP_ROTATE);
               hoge = millis();
               while(millis() - hoge < ROTATION){
                 color_read();
@@ -1599,6 +1620,23 @@ void loop() {
                   return;
                 }
               }
+              //直進
+              motor_write(GAP_GONE,GAP_GONE);
+              hoge = millis();
+              while(millis() - hoge < GOGOGO){
+                color_read();
+                judge_color();
+                if(isLine()){
+                  motor_write(0,0);
+                  white_time = millis();
+                  return;
+                }
+              }
+              motor_write(-GAP_GONE,-GAP_GONE);
+              hoge = millis();
+              while(millis() - hoge < GOGOGO);
+              //戻す
+              rotate_abs(this_angle);
               white_time = millis();
             }
           }
