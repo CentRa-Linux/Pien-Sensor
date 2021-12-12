@@ -82,7 +82,7 @@
 #define SERVO_MAX 480
 
 //三角コーナー探すモードかどうか
-#define CORNER_BORDER 4.0
+#define CORNER_BORDER 7.0
 
 //救助コーナーで曲がるほう
 #define ROTATE_BORDER 20.0
@@ -1209,7 +1209,7 @@ void nakamura_is_senpan(){
           return;
         }
       }else{
-        if(sonic_sensor_right() > ROTATE_BORDER){
+        if(sonic_sensor_right() > ROTATE_BORDER && !isSilver){
           alert(700);
           rotate(90,0);
           r_ori = sonic_sensor_right();
@@ -1684,6 +1684,8 @@ void loop() {
       judge_color();
       go_straight(r_onigiri,l_onigiri);
     }
+    motor_write(-48,-48);
+    delay(BACK_LINE);
     motor_write(0,0);
     if(will_change){
       state = SENPAN;
