@@ -561,6 +561,29 @@ void yabee_reset_sityattao(){
   delay(500);
 }
 
+void servo_write(Bucket mode){
+  change_i2c_port(3);
+  if(mode == RAISE){
+    buzzer(190);
+    angle = 0;
+    angle = map(angle, 0, 180, SERVO_MIN, SERVO_MAX);
+    pwm.setPWM(14,0,SERVO_MAX);
+    pwm.setPWM(15,0,SERVO_MIN);
+    delay(1000);
+  }else if(mode == DOWN){
+    buzzer(290);
+    angle = 180;
+    angle = map(angle, 0, 180, SERVO_MIN, SERVO_MAX);
+    pwm.setPWM(14,0,SERVO_MIN);
+    pwm.setPWM(15,0,SERVO_MAX);   
+    delay(1000);
+  }else if(mode == RELEASE){
+    pwm.setPWM(2,0,SERVO_MAX);
+  }else if(mode == HOLD){
+    pwm.setPWM(2,0,SERVO_MIN);
+  }
+}
+
 void setup(){
   /*#ifdef COLOR_DEBUG
   //ほげー
@@ -592,6 +615,7 @@ void setup(){
   Serial.begin(9600);
   //サーボ初期化・I2Cスタート
   i2c_init();
+  servo_write(RAISE);
   color_read();
   judge_color();
   /*if(Line_Sensor[0] == WHITE && Line_Sensor[1] == WHITE
@@ -677,29 +701,6 @@ void test_sensor_setup(){
   Wire.endTransmission();
   bmx_init();
   Serial.println("uwu");
-}
-
-void servo_write(Bucket mode){
-  change_i2c_port(3);
-  if(mode == RAISE){
-    buzzer(190);
-    angle = 0;
-    angle = map(angle, 0, 180, SERVO_MIN, SERVO_MAX);
-    pwm.setPWM(14,0,SERVO_MAX);
-    pwm.setPWM(15,0,SERVO_MIN);
-    delay(1000);
-  }else if(mode == DOWN){
-    buzzer(290);
-    angle = 180;
-    angle = map(angle, 0, 180, SERVO_MIN, SERVO_MAX);
-    pwm.setPWM(14,0,SERVO_MIN);
-    pwm.setPWM(15,0,SERVO_MAX);   
-    delay(1000);
-  }else if(mode == RELEASE){
-    pwm.setPWM(2,0,SERVO_MAX);
-  }else if(mode == HOLD){
-    pwm.setPWM(2,0,SERVO_MIN);
-  }
 }
 
 void check_voltage(){
