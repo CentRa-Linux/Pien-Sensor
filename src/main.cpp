@@ -20,7 +20,6 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <PCA9685.h>
-#include <ArduinoSTL.h>
 
 //ただのバカ
 #define A 440
@@ -70,7 +69,8 @@
 #define P_T_R 46
 #define P_T_M 52
 #define P_T_L 50
-#define P_T_B 48
+#define P_T_BR 48
+#define P_T_BL 48
 #define BZ 9
 
 //アドレス指定
@@ -660,7 +660,8 @@ void setup(){
   pinMode(P_T_R,INPUT);
   pinMode(P_T_M,INPUT);
   pinMode(P_T_L,INPUT);
-  pinMode(P_T_B,INPUT);
+  pinMode(P_T_BR,INPUT);
+  pinMode(P_T_BL,INPUT);
   pinMode(BZ,OUTPUT);
   // シリアル開始
   Serial.begin(9600);
@@ -1172,74 +1173,6 @@ void check_color(){
   Serial.println("");
 }
 
-void looking_corner(){
-  //三角コーナーコード
-  servo_write(DOWN);
-  motor_write(48,48);
-  float r_ori,l_ori;
-  r_ori = sonic_read(R_FRONT);
-  l_ori = sonic_read(L_FRONT);
-  while(digitalRead(P_T_M) == LOW/*digitalRead(P_T_R) == LOW && digitalRead(P_T_L) == LOW*/){
-    //まっすぐ進む
-    go_straight(r_ori,l_ori);
-    color_read();
-    judge_color();
-    if(Line_Sensor[1] != WHITE || Line_Sensor[3] != WHITE || isSilver){
-      motor_write(0,0);
-      buzzer(850);
-      motor_write(-48,-48);
-      delay(BACK_LINE);
-      motor_write(0,0);
-      delay(500);
-      rotate(90,0);
-      delay(500);
-    }
-  }
-  delay(250);
-  motor_write(0,0);
-  if(digitalRead(P_T_R) == LOW && digitalRead(P_T_L) == LOW){
-    //違うらしいよ
-    //右に回転
-    rotate(90,0);
-    return;
-  }else{
-    //三角コーナーじゃん！
-    servo_write(RAISE);
-    bmx_maguro();
-    rotate(135,0);
-    motor_write(-64,-64);
-    while(digitalRead(P_T_B) == LOW);
-    delay(250);
-    motor_write(0,0);
-    if(true/*analogRead(P_TPR_B) > B_TPR_BORDER*/){
-      //黒の時
-      servo_write(RELEASE);
-      delay(500);
-      servo_write(HOLD);
-      for(int i = 0;i < 3;i++){
-        motor_write(48,48);
-        delay(1500);
-        motor_write(0,0);
-        delay(250);
-        motor_write(-48,-48);
-        while(digitalRead(P_T_B) == HIGH);
-        motor_write(0,0);
-        servo_write(RELEASE);
-        delay(500);
-        servo_write(HOLD);
-        delay(250);
-      }
-      rotate(-45,0);
-      buzzer(600);
-      state = SENPAN;
-      return;
-    }else{
-      //三角コーナーじゃなくて壁の時の処理
-      //考えてないよ☆（ゝω・）vｷｬﾋﾟ
-    }
-  }
-}
-
 void famima(){
   int d;
   d=40;
@@ -1270,7 +1203,7 @@ void done_escape(){
 
 bool isEvent(){
   if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN || isSilver
-    || digitalRead(P_T_M) == HIGH){
+    || digitalRead(P_T_R) == HIGH || digitalRead(P_T_L) == HIGH){
       return true;
     }else{
       return false;
@@ -1733,6 +1666,33 @@ void test_sensor_loop(){/*
   //Serial.println(sonic_read(R_FRONT));*/
 }
 
+void i_am_right_handed_man(){
+  const int bs = 60;
+  const int difference = 36;
+  const float tolerance = 2.0;
+  const float bor = 4.0;
+  float f_right = sonic_read(R_FRONT);
+  float b_right = sonic_read(R_BACK);
+  const float over = 50.0;
+  const float too_over = 200.0;
+  if(f_right < over && b_right < over){
+    //どっちも貫通してないかチェック
+    if(f_right - b_right > tolerance || f_right > bor){
+      //前のほうが長いぞ！？
+      motor_write(bs - difference,bs + difference);
+    }else if(b_right - f_right > tolerance || f_right < bor){
+      //後ろの方が長杉君
+      motor_write(bs + difference,bs - difference);
+    }else{
+      motor_write(bs,bs);
+    }
+  }else if(b_right < too_over || b_right < too_over){
+    motor_write(bs - difference,bs + difference);
+  }else{
+    motor_write(bs,bs);
+  }
+}
+
 bool isLine(){
   if(Line_Sensor[0] != WHITE || Line_Sensor[1] != WHITE || Line_Sensor[2] != WHITE
     || Line_Sensor[3] != WHITE || Line_Sensor[4] != WHITE){
@@ -1931,6 +1891,7 @@ void loop() {
       Serial.println("Strange Error:No Color Found");
     }
   }else if(state == RESCUE){
+    servo_write(DOWN);
     int this_angle;
     bmx_maguro();
     this_angle = tan2angle(xMag,yMag);
@@ -1949,10 +1910,10 @@ void loop() {
       float sr,sl;
       #define OBJ 5.0
       #define ALLOW_OBJ 10.0
-      sr = sonic_read(R_FRONT);
-      sl = sonic_read(L_FRONT);
       if(millis() - timetime > 250){
         timetime = millis();
+        sr = sonic_read(R_FRONT);
+        sl = sonic_read(L_FRONT);
         if(!wall_is_right){
           if(abs(sr - p_sr) > OBJ && (sr < ALLOW_OBJ || p_sr < ALLOW_OBJ)){
             objective++;
@@ -1972,9 +1933,12 @@ void loop() {
             wall_count--;
           }
         }
+        p_sr = sr;
+        p_sl = sl;
       }
     }
     motor_write(0,0);
+    servo_write(RAISE);
     if(wall_count > 0){
       //壁やんけ！！！
       state = CORNER;
@@ -1998,10 +1962,86 @@ void loop() {
     }else{
       rotate(-90,0);
     }
+    motor_write(-48,-48);
+    while(digitalRead(P_T_BR) == LOW && digitalRead(P_T_BL) == LOW){
+     color_read();
+     judge_color();
+     if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN || isSilver){
+       break;
+     } 
+    }
+    if(digitalRead(P_T_BR) == HIGH){
+      motor_write(0,-48);
+      while(digitalRead(P_T_BL) == LOW);
+    }else if(digitalRead(P_T_BL) == HIGH){
+      motor_write(-48,0);
+      while(digitalRead(P_T_BR) == LOW);
+    }
+    motor_write(48,48);
+    delay(BACK_LINE * 2);
+    motor_write(-48,-48);
+    while(digitalRead(P_T_BR) == LOW && digitalRead(P_T_BL) == LOW){
+      color_read();
+      judge_color();
+      if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN || isSilver){
+        break;
+     } 
+    }
+    motor_write(0,0);
     wall_is_right = !wall_is_right;
   }else if(state == CORNER){
-    //右に回転
-    looking_corner();
+    servo_write(DOWN);
+    while(isEvent()){
+      color_read();
+      judge_color();
+      i_am_right_handed_man();
+    }
+    motor_write(0,0);
+    float rs = sonic_read(R_MIDDLE);
+    float ms = sonic_read(MIDDLE);
+    float ls = sonic_read(L_MIDDLE);
+    const float corner_target = 10.0;
+    const float tigauyan = 5.0;
+    if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN || isSilver){
+      motor_write(-48,-48);
+      delay(BACK_LINE);
+      motor_write(0,0);
+      rotate(-90,0);
+      return;
+    } 
+    if(abs(rs - corner_target) < tigauyan && abs(ms - corner_target) < tigauyan
+      && abs(ls - corner_target) < tigauyan){
+      //三角こーん
+      alert(600);
+      while(digitalRead(P_T_L) == LOW){
+        motor_write(0,48);
+      }
+      motor_write(0,0);
+      motor_write(-48,-48);
+      delay(BACK_LINE);
+      rotate(180,0);
+      motor_write(-72,-72);
+      while(digitalRead(P_T_R)  == LOW && digitalRead(P_T_L)  == LOW);
+      if(digitalRead(P_T_R) == HIGH){
+        motor_write(0,48);
+        while(digitalRead(P_T_L) == LOW);
+      }else if(digitalRead(P_T_L) == HIGH){
+        motor_write(48,0);
+        while(digitalRead(P_T_R) == LOW);
+      }
+      motor_write(0,0);
+      servo_write(RELEASE);
+      delay(2000);
+      servo_write(HOLD);
+      motor_write(48,48);
+      delay(BACK_LINE / 2);
+      rotate(45,0);
+      state = SENPAN;
+      return;
+    }else{
+      //かっべ
+      rotate(-90,0);
+    }
   }else if(state == SENPAN){
     nakamura_improved();
   }
