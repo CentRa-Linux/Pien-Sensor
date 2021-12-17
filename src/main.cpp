@@ -156,6 +156,10 @@ long timer;
 //Flag rescue to corner
 bool res2cor = false;
 
+//bmxのrcのやつ
+float rc = 0;
+const float keisu = 0.97;
+
 //Flag
 //次に
 bool hostile = false;
@@ -336,7 +340,7 @@ void judge_color(){
   #define M_TPR_BORDER 29
   #define L_TPR_BORDER 450
   #define B_TPR_BORDER 100
-  #define SILVER_BORDER 340
+  #define SILVER_BORDER 440
   #define R_GpR_MIN 1.0
   #define R_GpR_MAX 1.7
   #define L_GpR_MIN 1.0
@@ -1048,17 +1052,25 @@ float sonic_read(Sonic_Mode sm){
 }
 
 void go_bmx(int target){
-  tone(BZ,5000);
   bmx_maguro();
+  int ima = tan2angle(xMag,yMag);
+  int current = ima;
+  //int current = keisu * current + (1 - keisu) * (float)ima;
   if(target < 0) target += 360;
-  int orig = tan2angle(xMag,yMag);
-  if(orig < 0) orig += 360;
-  int dif = target - orig;
-  if(dif > 0){
-    //left up
-    motor_write(0,72);
+  if(current < 0) current += 360;
+  int tigai = target - current;
+  if(tigai <= -180){
+    tigai += 360;
+  }else if(tigai >= 180){
+    tigai -= 360;
+  }
+  //Serial.println(tigai);
+  if(tigai > 0){
+    motor_write(24,96);
+  }else if(tigai < 0){
+    motor_write(96,24);
   }else{
-    motor_write(72,0);
+    motor_write(60,60);
   }
 }
 
@@ -1071,27 +1083,16 @@ void go_straight(float r_base,float l_base){
   left = sonic_read(L_FRONT);
   float total = right + left;
   #define ADIF 20
-  if(right > KANTUU || left > KANTUU){
+  if(right > KANTUU){
     motor_write(BAKA,BAKA);
     return;
   }
-  if(right > left){
-    //左の値を採用
-    if(left > l_base + DIF){
-      motor_write(BAKA + VOL,BAKA - VOL);
-    }else if(left < l_base){
-      motor_write(BAKA - VOL,BAKA + VOL);
-    }else{
-      motor_write(BAKA,BAKA);
-    }
-  }else if(left > right){
-    if(right > r_base + DIF){
-      motor_write(BAKA - VOL,BAKA + VOL);
-    }else if(right < r_base){
-      motor_write(BAKA + VOL,BAKA - VOL);
-    }else{
-      motor_write(BAKA,BAKA);
-    }
+  if(right > r_base + DIF){
+    motor_write(BAKA - VOL,BAKA + VOL);
+  }else if(right < r_base){
+    motor_write(BAKA + VOL,BAKA - VOL);
+  }else{
+    motor_write(BAKA,BAKA);
   }
 }
 
@@ -1203,7 +1204,7 @@ void done_escape(){
 
 bool isEvent(){
   if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN || isSilver
-    || digitalRead(P_T_R) == HIGH || digitalRead(P_T_L) == HIGH){
+    || digitalRead(P_T_M) == HIGH/*digitalRead(P_T_R) == HIGH || digitalRead(P_T_L) == HIGH*/){
       return true;
     }else{
       return false;
@@ -1669,7 +1670,7 @@ void test_sensor_loop(){/*
 void i_am_right_handed_man(){
   const int bs = 60;
   const int difference = 36;
-  const float tolerance = 2.0;
+  const float tolerance = 5.0;
   const float bor = 4.0;
   float f_right = sonic_read(R_FRONT);
   float b_right = sonic_read(R_BACK);
@@ -1724,6 +1725,11 @@ void victim_killer(){
 }
 
 void loop() {
+  /*bmx_maguro();
+  int targ = tan2angle(xMag,yMag);
+  while(true){
+    go_bmx(targ);
+  }*/
   //check_bmx();
   //test_sensor_loop();
   //Serial.println(sonic_read(MIDDLE));
@@ -1760,7 +1766,7 @@ void loop() {
     if(isSilver){
       motor_write(0,0);
       isSilver = false;
-      state = SENPAN;
+      state = RESCUE;
       Serial.println("SILVER DETECTED");
       famima();
       motor_write(48,48);
@@ -1961,7 +1967,7 @@ void loop() {
       rotate(90,0);
     }else{
       rotate(-90,0);
-    }
+    }/*
     motor_write(-48,-48);
     while(digitalRead(P_T_BR) == LOW && digitalRead(P_T_BL) == LOW){
      color_read();
@@ -1985,18 +1991,20 @@ void loop() {
       judge_color();
       if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN || isSilver){
         break;
-     } 
+      } 
     }
-    motor_write(0,0);
+    motor_write(0,0);*/
     wall_is_right = !wall_is_right;
   }else if(state == CORNER){
     servo_write(DOWN);
-    while(isEvent()){
+    while(!isEvent()){
       color_read();
       judge_color();
-      i_am_right_handed_man();
+      go_straight(5.0,0);
+      //i_am_right_handed_man();
     }
     motor_write(0,0);
+    alert(5000);
     float rs = sonic_read(R_MIDDLE);
     float ms = sonic_read(MIDDLE);
     float ls = sonic_read(L_MIDDLE);
