@@ -1770,7 +1770,7 @@ void loop() {
       Serial.println("SILVER DETECTED");
       famima();
       motor_write(48,48);
-      delay(2000);
+      delay(500);
       motor_write(0,0);
       if(sonic_read(R_FRONT) < CORNER_ENTER){
         //右壁
@@ -2051,6 +2051,21 @@ void loop() {
       rotate(-90,0);
     }
   }else if(state == SENPAN){
-    nakamura_improved();
+    alert(440);
+    alert(880);
+    while(!isEvent()){
+      color_read();
+      judge_color();
+      go_straight(5.0,0);
+    }
+    motor_write(0,0);
+    if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN){
+      //脱出成功処理
+      done_escape();
+      return;
+    }else{
+      //なんか違うなぁ
+      rotate(-90,0);
+    }
   }
 }
