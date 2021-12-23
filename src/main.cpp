@@ -171,11 +171,14 @@ bool isGreenman = false;
 int volume;
 int previous_volume; 
  
- int Servo_Pin = 0;      // サーボ接続ピンを0番に
- int angle;
+int Servo_Pin = 0;      // サーボ接続ピンを0番に
+int angle;
 
- //前回のオール白の時の時間
- long white_time;
+//前回のオール白の時の時間
+long white_time;
+
+//rc
+float Xrc,Yrc;
 
 //愚かだなぁ
 int tune;
@@ -329,18 +332,18 @@ void i2c_init(){
 
 void judge_color(){
   #define RR_BORDER 250
-  #define RG_BORDER 285
+  #define RG_BORDER 275
   #define RB_BORDER 260
   #define RIR_BORDER 200
   #define LR_BORDER 268
-  #define LG_BORDER 320
+  #define LG_BORDER 310
   #define LB_BORDER 200
   #define LIR_BORDER 200
   #define R_TPR_BORDER 450
   #define M_TPR_BORDER 29
   #define L_TPR_BORDER 450
   #define B_TPR_BORDER 100
-  #define SILVER_BORDER 440
+  #define SILVER_BORDER 490
   #define R_GpR_MIN 1.0
   #define R_GpR_MAX 1.7
   #define L_GpR_MIN 1.0
@@ -922,7 +925,7 @@ void detect_green(){
   bool isLeftGreen = false;
   motor_write(0,0);
   buzzer(500);
-  for(int i = 0;i < 10;i++){
+  for(int i = 0;i < 50;i++){
     color_read();
     judge_color();
     if(Line_Sensor[1] == GREEN)isRightGreen = true;
@@ -953,7 +956,6 @@ void detect_green(){
       Serial.println("turning 180");
       buzzer(700);
       rotate(180,2);
-      delay(1000);
     }else if(isRightGreen && !isLeftGreen){
       //右に90ターン
       Serial.println("turning 90");
@@ -962,7 +964,6 @@ void detect_green(){
       delay(STRAIGHT);
       motor_write(0,0);
       rotate(90,1);
-      delay(1000);
     }else if(!isRightGreen && isLeftGreen){
       //左に90ターン
       Serial.println("turning -90");
@@ -971,10 +972,7 @@ void detect_green(){
       delay(STRAIGHT);
       motor_write(0,0);
       rotate(-90,1);
-      delay(1000);
     }
-    motor_write(36,36);
-    delay(250);
   }
 }
 
@@ -1053,8 +1051,10 @@ float sonic_read(Sonic_Mode sm){
 
 void go_bmx(int target){
   bmx_maguro();
-  int ima = tan2angle(xMag,yMag);
-  int current = ima;
+  #define K 0.96
+  Xrc = K * Xrc + (1 - K) * (float)xMag;
+  Yrc = K * Yrc + (1 - K) * (float)yMag;
+  int current = tan2angle(Xrc,Yrc);
   //int current = keisu * current + (1 - keisu) * (float)ima;
   if(target < 0) target += 360;
   if(current < 0) current += 360;
@@ -1629,7 +1629,7 @@ void test_sensor_loop(){/*
   color_read();
   judge_color();
   Serial.println(silver);
-  return;*/
+  return;*//*
   color_read();
   judge_color();
   Serial.print(rr);
@@ -1648,11 +1648,13 @@ void test_sensor_loop(){/*
   Serial.print((float)rg/rr);
   Serial.print(",");
   Serial.println((float)lg/lr);*/
+  color_read();
+  judge_color();
   for(int i = 0;i < 5;i++){
     Serial.print(Line_Sensor[i]);
     Serial.print(",");
-  }/*
-  Serial.println("");*//*
+  }
+  Serial.println("");/*
   check_bmx();
   bmx_maguro();
   Serial.print(xMag);
@@ -1695,7 +1697,7 @@ void i_am_right_handed_man(){
 }
 
 bool isLine(){
-  if(Line_Sensor[0] != WHITE || Line_Sensor[1] != WHITE || Line_Sensor[2] != WHITE
+  if(Line_Sensor[0] != WHITE || Line_Sensor[1] != WHITE
     || Line_Sensor[3] != WHITE || Line_Sensor[4] != WHITE){
     return true;
   }else{
@@ -1719,13 +1721,23 @@ int isSlope(){
   }
 }
 
-void victim_killer(){
-
-
+void hongee(){
+  bmx_accl();
+  if(abs(xAccl) > 1.2 && zAccl > 9.0){
+    tone(BZ,1000);
+    motor_write(0,0);
+    delay(1000);
+    motor_write(120,120);
+    delay(250);
+  }else{
+    noTone(BZ);
+    motor_write(120,120);
+  }
 }
 
-void loop() {
-  /*bmx_maguro();
+void loop(){
+  /*hongee();
+  bmx_maguro();
   int targ = tan2angle(xMag,yMag);
   while(true){
     go_bmx(targ);
@@ -1901,6 +1913,10 @@ void loop() {
     int this_angle;
     bmx_maguro();
     this_angle = tan2angle(xMag,yMag);
+    for(int i = 0;i < 10;i++){
+      bmx_maguro();
+      this_angle = K * this_angle + (1 - K) * tan2angle(xMag,yMag);
+    }
     color_read();
     judge_color();
     float p_sr,p_sl;
@@ -1909,6 +1925,9 @@ void loop() {
     int objective = 0;
     long timetime = millis();
     int wall_count = 0;
+    bmx_maguro();
+    Xrc = xMag;
+    Yrc = yMag;
     while(!isEvent()){
       go_bmx(this_angle);
       color_read();
@@ -1949,6 +1968,7 @@ void loop() {
       //壁やんけ！！！
       state = CORNER;
       alert(2000);
+      rotate(-90,0);
       return;
     }
     if(!wall_is_right){
@@ -2005,9 +2025,9 @@ void loop() {
     }
     motor_write(0,0);
     alert(5000);
-    float rs = sonic_read(R_MIDDLE);
+    float rs = sonic_read(MIDDLE);
     float ms = sonic_read(MIDDLE);
-    float ls = sonic_read(L_MIDDLE);
+    float ls = sonic_read(MIDDLE);
     const float corner_target = 10.0;
     const float tigauyan = 5.0;
     if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN || isSilver){
@@ -2018,7 +2038,7 @@ void loop() {
       return;
     } 
     if(abs(rs - corner_target) < tigauyan && abs(ms - corner_target) < tigauyan
-      && abs(ls - corner_target) < tigauyan){
+      && abs(ls - corner_target) < tigauyan && digitalRead(P_T_M) == HIGH){
       //三角こーん
       alert(600);
       while(digitalRead(P_T_L) == LOW){
@@ -2044,6 +2064,7 @@ void loop() {
       motor_write(48,48);
       delay(BACK_LINE / 2);
       rotate(45,0);
+      alert(880);
       state = SENPAN;
       return;
     }else{
@@ -2051,8 +2072,6 @@ void loop() {
       rotate(-90,0);
     }
   }else if(state == SENPAN){
-    alert(440);
-    alert(880);
     while(!isEvent()){
       color_read();
       judge_color();
