@@ -626,9 +626,9 @@ void servo_write(Bucket mode){
     pwm.setPWM(15,0,SERVO_MAX);   
     delay(1000);
   }else if(mode == RELEASE){
-    pwm.setPWM(2,0,SERVO_MAX);
+    pwm.setPWM(0,0,SERVO_MAX);
   }else if(mode == HOLD){
-    pwm.setPWM(2,0,SERVO_MIN);
+    pwm.setPWM(0,0,SERVO_MIN);
   }
 }
 
@@ -1599,7 +1599,12 @@ void fix_rotation(){
 
 }
 
-void test_sensor_loop(){/*
+void test_sensor_loop(){
+  motor_write(70,70);
+  color_read();
+  Serial.println("^q^");
+  return;
+  /*
   float r = sonic_read(R_FRONT);
   float l = sonic_read(L_FRONT);
   while(true){
@@ -1629,9 +1634,8 @@ void test_sensor_loop(){/*
   color_read();
   judge_color();
   Serial.println(silver);
-  return;*//*
+  return;*/
   color_read();
-  judge_color();
   Serial.print(rr);
   Serial.print(",");
   Serial.print(rg);
@@ -1647,9 +1651,7 @@ void test_sensor_loop(){/*
   return;/*
   Serial.print((float)rg/rr);
   Serial.print(",");
-  Serial.println((float)lg/lr);*/
-  color_read();
-  judge_color();
+  Serial.println((float)lg/lr);*//*
   for(int i = 0;i < 5;i++){
     Serial.print(Line_Sensor[i]);
     Serial.print(",");
@@ -1736,6 +1738,12 @@ void hongee(){
 }
 
 void loop(){
+  /*while(true){
+    servo_write(HOLD);
+    delay(1000);
+    servo_write(RELEASE);
+    delay(1000);
+  }*/
   /*hongee();
   bmx_maguro();
   int targ = tan2angle(xMag,yMag);
@@ -1743,9 +1751,9 @@ void loop(){
     go_bmx(targ);
   }*/
   //check_bmx();
-  //test_sensor_loop();
+  test_sensor_loop();
   //Serial.println(sonic_read(MIDDLE));
-  //return;
+  return;
   //カラーセンサー読み取り
   #ifdef COLOR_DEBUG
   test_sensor_loop();
