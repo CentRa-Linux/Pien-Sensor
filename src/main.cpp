@@ -54,21 +54,15 @@
 #define P_M_B2 2
 #define P_S_RFT 53
 #define P_S_LFT 47
-#define P_S_RBT 0
-#define P_S_LBT 0
-#define P_S_RMT 0
 #define P_S_MT A2
-#define P_S_LMT 0
 #define P_S_RFE 51
 #define P_S_LFE 49
-#define P_S_RBE 0
-#define P_S_LBE 0
-#define P_S_RME 0
 #define P_S_ME A1
-#define P_S_LME 0
 #define P_T_R 46
 #define P_T_M 52
 #define P_T_L 50
+#define P_T_RU 24
+#define P_T_LU 23
 #define P_T_BR 48
 #define P_T_BL 48
 #define BZ 9
@@ -118,7 +112,7 @@ int before_x,before_y;
 enum Color{BLACK,WHITE,GREEN,RED,SILVER};
 enum Bucket{RAISE,DOWN,RELEASE,HOLD};
 enum State{TRACE,RESCUE,CORNER,SENPAN};
-enum Sonic_Mode{MIDDLE,R_MIDDLE,L_MIDDLE,R_FRONT,L_FRONT,R_BACK,L_BACK};
+enum Sonic_Mode{MIDDLE,R_FRONT,L_FRONT};
 
 //int
 int lower, higher, rr, rg, rb, rir, lr, lg, lb, lir,silver,tpr_l,tpr_m,tpr_r,xMag,yMag,zMag,count = 0;
@@ -164,6 +158,9 @@ const float keisu = 0.97;
 //次に
 bool hostile = false;
 
+//障害物を横移動時に発見
+bool nanka_aru = false;
+
 //Green Flag
 bool isGreenman = false;
 
@@ -179,6 +176,24 @@ long white_time;
 
 //rc
 float Xrc,Yrc;
+
+//閾値
+int RG_BORDER = 275;
+int RB_BORDER = 260;
+int RIR_BORDER = 200;
+int LR_BORDER = 268;
+int LG_BORDER = 310;
+int LB_BORDER = 200;
+int LIR_BORDER = 200;
+int R_TPR_BORDER = 450;
+int M_TPR_BORDER = 29;
+int L_TPR_BORDER = 450;
+int B_TPR_BORDER = 100;
+int SILVER_BORDER = 490;
+int R_GpR_MIN = 1.0;
+int R_GpR_MAX = 1.7;
+int L_GpR_MIN = 1.0;
+int L_GpR_MAX = 1.7;
 
 //愚かだなぁ
 int tune;
@@ -331,23 +346,8 @@ void i2c_init(){
 }
 
 void judge_color(){
-  #define RR_BORDER 250
-  #define RG_BORDER 275
-  #define RB_BORDER 260
-  #define RIR_BORDER 200
-  #define LR_BORDER 268
-  #define LG_BORDER 310
-  #define LB_BORDER 200
-  #define LIR_BORDER 200
-  #define R_TPR_BORDER 450
-  #define M_TPR_BORDER 29
-  #define L_TPR_BORDER 450
-  #define B_TPR_BORDER 100
-  #define SILVER_BORDER 490
-  #define R_GpR_MIN 1.0
-  #define R_GpR_MAX 1.7
-  #define L_GpR_MIN 1.0
-  #define L_GpR_MAX 1.7
+  int RR_BORDER = 250;
+  
 
   //前回の値を移動
   for(int i = 0;i < 5;i++) Previous_Line_Sensor[i] = Line_Sensor[i];
@@ -652,21 +652,15 @@ void setup(){
   pinMode(P_M_B2,OUTPUT);
   pinMode(P_S_RFT,OUTPUT);
   pinMode(P_S_LFT,OUTPUT);
-  pinMode(P_S_RBT,OUTPUT);
-  pinMode(P_S_LBT,OUTPUT);
-  pinMode(P_S_RMT,OUTPUT);
   pinMode(P_S_MT,OUTPUT);
-  pinMode(P_S_LMT,OUTPUT);
   pinMode(P_S_RFE,INPUT);
   pinMode(P_S_LFE,INPUT);
-  pinMode(P_S_RBE,INPUT);
-  pinMode(P_S_LBE,INPUT);
-  pinMode(P_S_RME,INPUT);
   pinMode(P_S_ME,INPUT);
-  pinMode(P_S_LME,INPUT);
   pinMode(P_T_R,INPUT);
   pinMode(P_T_M,INPUT);
   pinMode(P_T_L,INPUT);
+  pinMode(P_T_RU,INPUT);
+  pinMode(P_T_LU,INPUT);
   pinMode(P_T_BR,INPUT);
   pinMode(P_T_BL,INPUT);
   pinMode(BZ,OUTPUT);
@@ -921,10 +915,15 @@ void rotate_abs(int original_angle){
 void detect_green(){
   #define STRAIGHT 300
   #define GREEN_TIME 250
+  #define DEC_GREEN 20
   bool isRightGreen = false;
   bool isLeftGreen = false;
   motor_write(0,0);
   buzzer(500);
+  if(Line_Sensor[1] == GREEN)isRightGreen = true;
+  if(Line_Sensor[3] == GREEN)isLeftGreen = true;
+  RG_BORDER -= DEC_GREEN;
+  LG_BORDER -= DEC_GREEN;
   for(int i = 0;i < 50;i++){
     color_read();
     judge_color();
@@ -944,6 +943,8 @@ void detect_green(){
   motor_write(0,0);
   color_read();
   judge_color();
+  RG_BORDER += DEC_GREEN;
+  LG_BORDER += DEC_GREEN;
   if(Line_Sensor[0] == WHITE && Line_Sensor[4] == WHITE){
     //フェイク交差点だったとき
     Serial.println("An Fatal Error Has Occured.Program Will Exit.Stop Code:Black Line Not Found");
@@ -993,21 +994,6 @@ float sonic_read(Sonic_Mode sm){
     digitalWrite(P_S_MT,LOW);
     du = pulseIn(P_S_ME,HIGH);
     break;
-    case R_MIDDLE:
-    digitalWrite(P_S_RMT,LOW);
-    delayMicroseconds(2);
-    digitalWrite(P_S_RMT,HIGH);
-    delayMicroseconds(10);
-    digitalWrite(P_S_RMT,LOW);
-    du = pulseIn(P_S_RME,HIGH);
-    break;
-    case L_MIDDLE:
-    digitalWrite(P_S_LMT,LOW);
-    delayMicroseconds(2);
-    digitalWrite(P_S_LMT,HIGH);
-    delayMicroseconds(10);
-    digitalWrite(P_S_LMT,LOW);
-    du = pulseIn(P_S_LME,HIGH);
     break;
     case R_FRONT:
     digitalWrite(P_S_RFT,LOW);
@@ -1024,22 +1010,6 @@ float sonic_read(Sonic_Mode sm){
     delayMicroseconds(10);
     digitalWrite(P_S_LFT,LOW);
     du = pulseIn(P_S_LFE,HIGH);
-    break;
-    case R_BACK:
-    digitalWrite(P_S_RBT,LOW);
-    delayMicroseconds(2);
-    digitalWrite(P_S_RBT,HIGH);
-    delayMicroseconds(10);
-    digitalWrite(P_S_RBT,LOW);
-    du = pulseIn(P_S_RBE,HIGH);
-    break;
-    case L_BACK:
-    digitalWrite(P_S_RBT,LOW);
-    delayMicroseconds(2);
-    digitalWrite(P_S_RBT,HIGH);
-    delayMicroseconds(10);
-    digitalWrite(P_S_RBT,LOW);
-    du = pulseIn(P_S_RBE,HIGH);
     break;
   }
   if(du > 0){
@@ -1204,7 +1174,8 @@ void done_escape(){
 
 bool isEvent(){
   if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN || isSilver
-    || digitalRead(P_T_M) == HIGH/*digitalRead(P_T_R) == HIGH || digitalRead(P_T_L) == HIGH*/){
+    || digitalRead(P_T_M) == HIGH/*digitalRead(P_T_R) == HIGH || digitalRead(P_T_L) == HIGH
+    || digitalRead(P_T_RU) == HIGH || digitalRead(P_T_LU) == HIGH*/){
       return true;
     }else{
       return false;
@@ -1240,6 +1211,7 @@ void massugu(){
 
 void rescue_go_side(){
   motor_write(48,48);
+  nanka_aru = false;
   long hoge = millis();
   while(true){
     color_read();
@@ -1251,6 +1223,7 @@ void rescue_go_side(){
       return;
     }
     if(sonic_read(MIDDLE) < 6.0){
+      nanka_aru = true;
       return;
     }
   }
@@ -1677,7 +1650,7 @@ void i_am_right_handed_man(){
   const float tolerance = 5.0;
   const float bor = 4.0;
   float f_right = sonic_read(R_FRONT);
-  float b_right = sonic_read(R_BACK);
+  float b_right = sonic_read(R_FRONT);
   const float over = 50.0;
   const float too_over = 200.0;
   if(f_right < over && b_right < over){
@@ -1735,6 +1708,10 @@ void hongee(){
     noTone(BZ);
     motor_write(120,120);
   }
+}
+
+void victim_finding_v2_another(){
+
 }
 
 void loop(){
@@ -1802,7 +1779,25 @@ void loop(){
       motor_write(48,48);
       delay(1500);
       motor_write(0,0);
-      fix_rotation();
+      rotate(90,0);
+      motor_write(-48,-48);
+      delay(1500);
+      motor_write(0,0);
+      servo_write(DOWN);
+      motor_write(48,48);
+      while(digitalRead(P_T_R == LOW) && digitalRead(P_T_L == LOW));
+      if(digitalRead(P_T_R) == HIGH){
+        //右反応
+        while(digitalRead(P_T_L) == LOW){
+          motor_write(0,48);
+        }
+      }else{
+        while(digitalRead(P_T_R) == LOW){
+          motor_write(48,0);
+      }
+      motor_write(0,0);
+      servo_write(RAISE);
+      rotate(-90,0);
       return;
     }
     if(touch_sensor()){
@@ -1919,12 +1914,12 @@ void loop(){
   }else if(state == RESCUE){
     servo_write(DOWN);
     int this_angle;
-    bmx_maguro();
-    this_angle = tan2angle(xMag,yMag);
+    int kakudo = 0;
     for(int i = 0;i < 10;i++){
       bmx_maguro();
-      this_angle = K * this_angle + (1 - K) * tan2angle(xMag,yMag);
+      kakudo += tan2angle(xMag,yMag);
     }
+    this_angle = kakudo / 10;
     color_read();
     judge_color();
     float p_sr,p_sl;
@@ -1985,43 +1980,50 @@ void loop(){
       rotate(-90,0);
     }
     rescue_go_side();
+    bool kabe_naiyan = false;
     if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN || isSilver){
       //ちゃうねん
       motor_write(-48,-48);
       delay(BACK_LINE);
       motor_write(0,0);
+    }else if(!wall_is_right){
+      if(sonic_read(L_FRONT) > 20.0){
+        //左壁ないやんけ！ふぁー！
+        kabe_naiyan = true;
+      }
+    }else{
+      if(sonic_read(R_FRONT) > 20.0){
+        kabe_naiyan = true;
+      }
     }
     if(!wall_is_right){
       rotate(90,0);
     }else{
       rotate(-90,0);
-    }/*
-    motor_write(-48,-48);
-    while(digitalRead(P_T_BR) == LOW && digitalRead(P_T_BL) == LOW){
-     color_read();
-     judge_color();
-     if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN || isSilver){
-       break;
-     } 
     }
-    if(digitalRead(P_T_BR) == HIGH){
-      motor_write(0,-48);
-      while(digitalRead(P_T_BL) == LOW);
-    }else if(digitalRead(P_T_BL) == HIGH){
-      motor_write(-48,0);
-      while(digitalRead(P_T_BR) == LOW);
+    if(/*!kabe_naiyan*/false){
+      while(digitalRead(P_T_BR) == LOW && digitalRead(P_T_BL) == LOW){
+        motor_write(-48,-48);
+      }
+      if(digitalRead(P_T_BR) == HIGH){
+        motor_write(0,-48);
+        while(digitalRead(P_T_BL) == LOW);
+      }else if(digitalRead(P_T_BL) == HIGH){
+        motor_write(-48,0);
+        while(digitalRead(P_T_BR) == LOW);
+      }
+      motor_write(48,48);
+      delay(BACK_LINE * 2);
+      motor_write(-48,-48);
+      while(digitalRead(P_T_BR) == LOW && digitalRead(P_T_BL) == LOW){
+        color_read();
+        judge_color();
+        if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN || isSilver){
+          break;
+        } 
+      }
     }
-    motor_write(48,48);
-    delay(BACK_LINE * 2);
-    motor_write(-48,-48);
-    while(digitalRead(P_T_BR) == LOW && digitalRead(P_T_BL) == LOW){
-      color_read();
-      judge_color();
-      if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN || isSilver){
-        break;
-      } 
-    }
-    motor_write(0,0);*/
+    motor_write(0,0);
     wall_is_right = !wall_is_right;
   }else if(state == CORNER){
     servo_write(DOWN);
@@ -2033,11 +2035,6 @@ void loop(){
     }
     motor_write(0,0);
     alert(5000);
-    float rs = sonic_read(MIDDLE);
-    float ms = sonic_read(MIDDLE);
-    float ls = sonic_read(MIDDLE);
-    const float corner_target = 10.0;
-    const float tigauyan = 5.0;
     if(Line_Sensor[1] == GREEN || Line_Sensor[3] == GREEN || isSilver){
       motor_write(-48,-48);
       delay(BACK_LINE);
@@ -2045,33 +2042,43 @@ void loop(){
       rotate(-90,0);
       return;
     } 
-    if(abs(rs - corner_target) < tigauyan && abs(ms - corner_target) < tigauyan
-      && abs(ls - corner_target) < tigauyan && digitalRead(P_T_M) == HIGH){
+    if(digitalRead(P_T_R) == HIGH || digitalRead(P_T_L) == HIGH){
       //三角こーん
-      alert(600);
-      while(digitalRead(P_T_L) == LOW){
-        motor_write(0,48);
-      }
-      motor_write(0,0);
-      motor_write(-48,-48);
-      delay(BACK_LINE);
-      rotate(180,0);
-      motor_write(-72,-72);
-      while(digitalRead(P_T_R)  == LOW && digitalRead(P_T_L)  == LOW);
+      bool sankaku_is_right;
       if(digitalRead(P_T_R) == HIGH){
+        sankaku_is_right = true;
+      }else{
+        sankaku_is_right = false;
+      }
+      alert(600);
+      motor_write(-48,-48);
+      delay(1000);
+      motor_write(0,0);
+      if(sankaku_is_right){
+        rotate(-135,0);
+      }else{
+        rotate(135,0);
+      }
+      motor_write(-72,-72);
+      while(digitalRead(P_T_BR)  == LOW && digitalRead(P_T_BL)  == LOW);
+      if(digitalRead(P_T_BR) == HIGH){
         motor_write(0,48);
-        while(digitalRead(P_T_L) == LOW);
-      }else if(digitalRead(P_T_L) == HIGH){
+        while(digitalRead(P_T_BL) == LOW);
+      }else if(digitalRead(P_T_BL) == HIGH){
         motor_write(48,0);
-        while(digitalRead(P_T_R) == LOW);
+        while(digitalRead(P_T_BR) == LOW);
       }
       motor_write(0,0);
       servo_write(RELEASE);
       delay(2000);
       servo_write(HOLD);
       motor_write(48,48);
-      delay(BACK_LINE / 2);
-      rotate(45,0);
+      delay(1000);
+      if(sankaku_is_right){
+        rotate(45,0);
+      }else{
+        rotate(-45,0);
+      }
       alert(880);
       state = SENPAN;
       return;
@@ -2080,6 +2087,7 @@ void loop(){
       rotate(-90,0);
     }
   }else if(state == SENPAN){
+    servo_write(DOWN);
     while(!isEvent()){
       color_read();
       judge_color();
